@@ -53,8 +53,6 @@ typedef struct {
     // store PE image information
     uintptr PEImage;
     uintptr DataDir;
-    uintptr ImportTable;
-    uint32  ImportTableSize;
     uintptr EntryPoint;
     uintptr ImageBase;
     uint32  ImageSize;
@@ -63,6 +61,12 @@ typedef struct {
     // store PE image NT header
     Image_FileHeader FileHeader;
     OptionalHeader   OptHeader;
+
+    // store info need fixed when execute
+    uintptr ImportTable;
+    uint32  ImportTableSize;
+    uintptr DelayImportTable;
+    uint32  DelayImportTableSize;
 
     // about characteristics
     bool IsDLL;
@@ -113,9 +117,9 @@ static bool  parsePEImage(PELoader* loader);
 static bool  checkPEImage(PELoader* loader);
 static bool  mapSections(PELoader* loader);
 static bool  fixRelocTable(PELoader* loader);
-static bool  initDelayload(PELoader* loader);
 static bool  initTLSDirectory(PELoader* loader);
 static void  prepareImportTable(PELoader* loader);
+static void  prepareDelayImportTable(PELoader* loader);
 static bool  backupPEImage(PELoader* loader);
 static bool  flushInstructionCache(PELoader* loader);
 
@@ -127,6 +131,7 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName);
 static errno ldr_init_mutex();
 static bool  ldr_copy_image();
 static bool  ldr_process_import();
+static bool  ldr_process_delay_import();
 static void  ldr_alloc_tls_block();
 static void  ldr_free_tls_block();
 static void  ldr_tls_callback(DWORD dwReason);
@@ -468,15 +473,12 @@ static errno loadPEImage(PELoader* loader)
     {
         return ERR_LOADER_FIX_RELOC_TABLE;
     }
-    if (!initDelayload(loader))
-    {
-        return ERR_LOADER_INIT_DELAYLOAD;
-    }
     if (!initTLSDirectory(loader))
     {
         return ERR_LOADER_INIT_TLS_DIRECTORY;
     }
     prepareImportTable(loader);
+    prepareDelayImportTable(loader);
     dbg_log("[PE Loader]", "PE Image: 0x%zX", loader->PEImage);
     return NO_ERROR;
 }
@@ -652,81 +654,6 @@ static bool fixRelocTable(PELoader* loader)
     return true;
 }
 
-static bool initDelayload(PELoader* loader)
-{
-    Runtime_M* runtime = loader->Runtime;
-
-    uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
-    uintptr dlTable   = peImage + dd.VirtualAddress;
-    uint32  tableSize = dd.Size;
-    // check need initialize delayload
-    if (tableSize == 0)
-    {
-        return true;
-    }
-    void* tableAddr = (void*)dlTable; // for erase table after
-    Image_DelayloadDescriptor* dld = (Image_DelayloadDescriptor*)(dlTable);
-    for (;;)
-    {
-        if (dld->DllNameRVA == 0)
-        {
-            break;
-        }
-        // check the target DLL is loaded
-        LPSTR  dllName  = (LPSTR)(peImage + dld->DllNameRVA);
-        LPWSTR dllNameW = runtime->WinBase.ANSIToUTF16(dllName);
-        if (dllNameW == NULL)
-        {
-            return false;
-        }
-        HMODULE hModule = GetModuleHandle(dllNameW);
-        runtime->Memory.Free(dllNameW);
-        if (hModule == NULL)
-        {
-            hModule = loader->LoadLibraryA(dllName);
-            dbg_log("[PE Loader]", "Lazy LoadLibrary: %s", dllName);
-        } else {
-            dbg_log("[PE Loader]", "Already LoadLibrary: %s", dllName);
-        }
-        if (hModule == NULL)
-        {
-            return false;
-        }
-        Image_ThunkData* nameTable = (Image_ThunkData*)(peImage + dld->ImportNameTableRVA);
-        Image_ThunkData* addrTable = (Image_ThunkData*)(peImage + dld->ImportAddressTableRVA);
-        Image_ImportByName* ibn;
-        for (;;)
-        {
-            if (nameTable->u1.AddressOfData == 0)
-            {
-                break;
-            }
-            void* proc;
-            if (IMAGE_SNAP_BY_ORDINAL(nameTable->u1.Ordinal))
-            {
-                proc = ldr_GetProcAddress(hModule, (LPSTR)(nameTable->u1.Ordinal));
-            } else {
-                ibn = (Image_ImportByName*)(peImage + nameTable->u1.AddressOfData);
-                proc = ldr_GetProcAddress(hModule, ibn->Name);
-            }
-            if (proc == NULL)
-            {
-                return false;
-            }
-            addrTable->u1.Function = (QWORD)proc;
-            nameTable++;
-            addrTable++;
-        }
-        dld++;
-    }
-    // destroy table for prevent extract raw PE image
-    RandBuffer(tableAddr, tableSize);
-    return true;
-}
-
 static bool initTLSDirectory(PELoader* loader)
 {
     uintptr peImage = loader->PEImage;
@@ -741,7 +668,6 @@ static bool initTLSDirectory(PELoader* loader)
         return true;
     }
     Image_TLSDirectory* tls = (Image_TLSDirectory*)(tlsTable);
-
     // allocate memory for copy template data
     // the first 16 bytes for store original TLS address and align
     uint size  = tls->EndAddressOfRawData - tls->StartAddressOfRawData;
@@ -767,10 +693,8 @@ static bool initTLSDirectory(PELoader* loader)
     mem_copy((void*)(start), (void*)(tls->StartAddressOfRawData), size);
     mem_init((void*)(start + size), tls->SizeOfZeroFill);
     dbg_log("[PE Loader]", "TLS block template: 0x%zX", block);
-
     // record tls callback list
     loader->TLSList = (TLSCallback_t*)(tls->AddressOfCallBacks);
-
     // destroy table for prevent extract raw PE image
     RandBuffer((byte*)tlsTable, tableSize);
     return true;
@@ -785,6 +709,17 @@ static void prepareImportTable(PELoader* loader)
 
     loader->ImportTable     = peImage + dd.VirtualAddress;
     loader->ImportTableSize = dd.Size;
+}
+
+static void prepareDelayImportTable(PELoader* loader)
+{
+    uintptr peImage = loader->PEImage;
+    uintptr dataDir = loader->DataDir;
+    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT * PE_DATA_DIRECTORY_SIZE;
+    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
+
+    loader->DelayImportTable     = peImage + dd.VirtualAddress;
+    loader->DelayImportTableSize = dd.Size;
 }
 
 // backupPEImage is used to execute PE image multi times.
@@ -1143,7 +1078,7 @@ static bool ldr_process_import()
     uintptr peImage     = loader->PEImage;
     uintptr importTable = loader->ImportTable;
     uint32  tableSize   = loader->ImportTableSize;
-    // check need import
+    // check need process import
     if (tableSize == 0)
     {
         return true;
@@ -1197,6 +1132,78 @@ static bool ldr_process_import()
             dstThunk += sizeof(uintptr);
         }
         import++;
+    }
+    return true;
+}
+
+__declspec(noinline)
+static bool ldr_process_delay_import()
+{
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
+
+    uintptr peImage   = loader->PEImage;
+    uintptr dlTable   = loader->DelayImportTable;
+    uint32  tableSize = loader->DelayImportTableSize;
+    // check need process delay import
+    if (tableSize == 0)
+    {
+        return true;
+    }
+    Image_DelayloadDescriptor* dld = (Image_DelayloadDescriptor*)(dlTable);
+    for (;;)
+    {
+        if (dld->DllNameRVA == 0)
+        {
+            break;
+        }
+        // check the target DLL is loaded
+        LPSTR  dllName  = (LPSTR)(peImage + dld->DllNameRVA);
+        LPWSTR dllNameW = runtime->WinBase.ANSIToUTF16(dllName);
+        if (dllNameW == NULL)
+        {
+            return false;
+        }
+        HMODULE hModule = GetModuleHandle(dllNameW);
+        runtime->Memory.Free(dllNameW);
+        if (hModule == NULL)
+        {
+            hModule = loader->LoadLibraryA(dllName);
+            dbg_log("[PE Loader]", "Lazy LoadLibrary: %s", dllName);
+        } else {
+            dbg_log("[PE Loader]", "Already LoadLibrary: %s", dllName);
+        }
+        if (hModule == NULL)
+        {
+            return false;
+        }
+        Image_ThunkData* nameTable = (Image_ThunkData*)(peImage + dld->ImportNameTableRVA);
+        Image_ThunkData* addrTable = (Image_ThunkData*)(peImage + dld->ImportAddressTableRVA);
+        Image_ImportByName* ibn;
+        for (;;)
+        {
+            if (nameTable->u1.AddressOfData == 0)
+            {
+                break;
+            }
+            void* proc;
+            if (IMAGE_SNAP_BY_ORDINAL(nameTable->u1.Ordinal))
+            {
+                proc = ldr_GetProcAddress(hModule, (LPSTR)(nameTable->u1.Ordinal));
+
+            } else {
+                ibn = (Image_ImportByName*)(peImage + nameTable->u1.AddressOfData);
+                proc = ldr_GetProcAddress(hModule, ibn->Name);
+            }
+            if (proc == NULL)
+            {
+                return false;
+            }
+            addrTable->u1.Function = (QWORD)proc;
+            nameTable++;
+            addrTable++;
+        }
+        dld++;
     }
     return true;
 }
@@ -1968,6 +1975,12 @@ errno LDR_Execute()
         if (!ldr_process_import())
         {
             errno = ERR_LOADER_PROCESS_IMPORT;
+            break;
+        }
+        // load library and fix function address
+        if (!ldr_process_delay_import())
+        {
+            errno = ERR_LOADER_PROCESS_DELAY_IMPORT;
             break;
         }
         // make callback about DLL_PROCESS_DETACH
