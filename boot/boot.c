@@ -146,22 +146,14 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     }
     config->Image = image;
     // load command line ANSI, it can be empty
-    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_A, &config->CommandLineA, &size))
+    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_A, &config->CommandLineA, NULL))
     {
         return ERR_NOT_FOUND_CMDLINE_A;
     }
-    if (size > 4096)
-    {
-        return ERR_COMMAND_LINE_TOO_LONG;
-    }
     // load command line Unicode, it can be empty
-    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_W, &config->CommandLineW, &size))
+    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_W, &config->CommandLineW, NULL))
     {
         return ERR_NOT_FOUND_CMDLINE_W;
-    }
-    if (size > 4096)
-    {
-        return ERR_COMMAND_LINE_TOO_LONG;
     }
     // load wait main, it must be true of false
     if (!runtime->Argument.GetValue(ARG_IDX_WAIT_MAIN, &config->WaitMain, &size))
