@@ -32,6 +32,9 @@ typedef struct {
     HANDLE StdOutput;
     HANDLE StdError;
 
+    // if failed to load library, can continue it.
+    bool AllowSkipDLL;
+
     // not erase instructions after call functions about Init or Exit.
     bool NotEraseInstruction;
 
