@@ -1326,6 +1326,12 @@ static errno ldr_exit_process(UINT uExitCode)
 {
     PELoader* loader = getPELoaderPointer();
 
+    // make callback about DLL_PROCESS_DETACH
+    if (loader->IsDLL)
+    {
+        pe_dll_main(DLL_PROCESS_DETACH, true);
+    }
+
     // call ExitProcess for terminate all threads
     errno errno = NO_ERROR;
     for (;;)
@@ -1343,12 +1349,6 @@ static errno ldr_exit_process(UINT uExitCode)
         loader->WaitForSingleObject(hThread, INFINITE);
         loader->CloseHandle(hThread);
         break;
-    }
-
-    // make callback about DLL_PROCESS_DETACH
-    if (loader->IsDLL)
-    {
-        pe_dll_main(DLL_PROCESS_DETACH, true);
     }
     return errno;
 }
@@ -1506,13 +1506,13 @@ void stub_ExecuteThread(LPVOID lpParameter)
     LPVOID  parameter    = ctx->lpParameter;
     runtime->Memory.Free(lpParameter);
 
-    // execute TLS callback list before call function.
+    // execute TLS callback list before call dll_main.
     ldr_alloc_tls_block();
+    ldr_tls_callback(DLL_THREAD_ATTACH);
+
     if (loader->IsDLL)
     {
         pe_dll_main(DLL_THREAD_ATTACH, false);
-    } else {    
-        ldr_tls_callback(DLL_THREAD_ATTACH);
     }
 
     // execute the function
@@ -1529,13 +1529,13 @@ void hook_ExitThread(DWORD dwExitCode)
 
     dbg_log("[PE Loader]", "ExitThread: %d", dwExitCode);
 
-    // execute TLS callback list befor call ExitThread.
     if (loader->IsDLL)
     {
         pe_dll_main(DLL_THREAD_DETACH, false);
-    } else {
-        ldr_tls_callback(DLL_THREAD_DETACH);
     }
+
+    // execute TLS callback list after call dll_main.
+    ldr_tls_callback(DLL_THREAD_DETACH);
     ldr_free_tls_block();
 
     loader->ExitThread(dwExitCode);
@@ -1872,8 +1872,6 @@ static bool pe_dll_main(DWORD dwReason, bool setExitCode)
     {
         set_exit_code(exitCode);
     }
-    // execute TLS callback list after call DllMain.
-    ldr_tls_callback(dwReason);
     return retval;
 }
 
@@ -1998,6 +1996,9 @@ errno LDR_Execute()
         // make callback about DLL_PROCESS_DETACH
         if (loader->IsDLL)
         {
+            // TODO recover
+            ldr_alloc_tls_block();
+            ldr_tls_callback(DLL_PROCESS_ATTACH);
             if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
             {
                 errno = ERR_LOADER_CALL_DLL_MAIN;
@@ -2036,13 +2037,15 @@ skip:
 __declspec(noinline)
 errno LDR_Exit(uint exitCode)
 {
+    PELoader* loader = getPELoaderPointer();
+
     if (!ldr_lock())
     {
         return ERR_LOADER_LOCK;
     }
 
     errno errno = NO_ERROR;
-    if (is_running())
+    if (is_running() || loader->IsDLL)
     {
         errno = ldr_exit_process(exitCode);
     }
