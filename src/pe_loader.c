@@ -958,7 +958,7 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     // process ordinal import
     if (lpProcName <= (LPCSTR)(0xFFFF))
     {
-        dbg_log("[PE Loader]", "GetProcAddress: %d", lpProcName);
+        dbg_log("[PE Loader]", "GetProcAddressByOrdinal: %d", lpProcName);
         return loader->GetProcAddress(hModule, lpProcName);
     }
     dbg_log("[PE Loader]", "GetProcAddress: %s", lpProcName);
@@ -1186,15 +1186,15 @@ static bool ldr_process_delay_import()
             {
                 break;
             }
-            void* proc;
+            LPCSTR procName;
             if (IMAGE_SNAP_BY_ORDINAL(nameTable->u1.Ordinal))
             {
-                proc = ldr_GetProcAddress(hModule, (LPSTR)(nameTable->u1.Ordinal));
-
+                procName = (LPCSTR)((nameTable->u1.Ordinal) & 0xFFFF);
             } else {
                 ibn = (Image_ImportByName*)(peImage + nameTable->u1.AddressOfData);
-                proc = ldr_GetProcAddress(hModule, ibn->Name);
+                procName = (LPCSTR)(ibn->Name);
             }
+            void* proc = ldr_GetProcAddress(hModule, procName);
             if (proc == NULL)
             {
                 return false;
