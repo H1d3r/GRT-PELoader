@@ -1095,7 +1095,13 @@ static bool ldr_process_import()
         HMODULE hModule = loader->LoadLibraryA(dllName);
         if (hModule == NULL)
         {
-            return false;
+            if (!loader->Config.AllowSkipDLL)
+            {
+                return false;
+            }
+            dbg_log("[PE Loader]", "Skipped Library: %s", dllName);
+            import++;
+            continue;            
         }
         dbg_log("[PE Loader]", "LoadLibrary: %s", dllName);
         uintptr srcThunk;
@@ -1175,7 +1181,13 @@ static bool ldr_process_delay_import()
         }
         if (hModule == NULL)
         {
-            return false;
+            if (!loader->Config.AllowSkipDLL)
+            {
+                return false;
+            }
+            dbg_log("[PE Loader]", "Skipped Delay Library: %s", dllName);
+            dld++;
+            continue;
         }
         Image_ThunkData* nameTable = (Image_ThunkData*)(peImage + dld->ImportNameTableRVA);
         Image_ThunkData* addrTable = (Image_ThunkData*)(peImage + dld->ImportAddressTableRVA);
