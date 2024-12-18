@@ -40,19 +40,22 @@ bool TestInitPELoader()
     // Read PE image file
     LPSTR file;
 #ifdef _WIN64
-    file = "image\\x64\\ucrtbase_main.exe";
+    // file = "image\\x64\\ucrtbase_main.exe";
     // file = "image\\x64\\ucrtbase_wmain.exe";
-    // file = "image\\go.exe";
-    // file = "E:\\Temp\\rust_x64.exe";
-    // file = "cs_x64.exe";
+    // file = "image\\x64\\go.exe";
+    file = "image\\x64\\rust_msvc.exe";
 #elif _WIN32
     file = "image\\x86\\ucrtbase_main.exe";
     // file = "image\\x86\\ucrtbase_wmain.exe";
     // file = "image\\x86\\go.exe";
-    // file = "cs_x86.exe";
+    file = "image\\x86\\rust_msvc.exe";
 #endif
     // file = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\PowerShell.exe";
-    file = "C:\\Windows\\System32\\cmd.exe";
+    // file = "C:\\Windows\\System32\\cmd.exe";
+    // file = "C:\\Windows\\System32\\mscoree.dll";
+    // file = "C:\\Windows\\System32\\combase.dll";
+    // file = "C:\\Windows\\System32\\ole32.dll";
+    // file = "C:\\Windows\\System32\\oleaut32.dll";
 
     byte* buf; uint size;
     errno err = runtime->WinFile.ReadFileA(file, &buf, &size);
