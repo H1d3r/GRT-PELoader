@@ -56,19 +56,25 @@
     <ClInclude Include="..\include\win_api.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\windows_t.h">
-      <Filter>Header</Filter>
-    </ClInclude>
     <ClInclude Include="..\boot\boot.h">
       <Filter>Header</Filter>
     </ClInclude>
     <ClInclude Include="build.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\msvcrt_t.h">
+    <ClInclude Include="..\include\win_types.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\ucrtbase_t.h">
+    <ClInclude Include="..\include\dll_kernel32.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\dll_msvcrt.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\dll_shell32.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\dll_ucrtbase.h">
       <Filter>Header</Filter>
     </ClInclude>
   </ItemGroup>
