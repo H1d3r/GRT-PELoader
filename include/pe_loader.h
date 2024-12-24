@@ -2,7 +2,8 @@
 #define PE_LOADER_H
 
 #include "c_types.h"
-#include "windows_t.h"
+#include "win_types.h"
+#include "dll_kernel32.h"
 #include "hash_api.h"
 #include "errno.h"
 #include "runtime.h"

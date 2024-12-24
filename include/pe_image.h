@@ -2,7 +2,7 @@
 #define PE_IMAGE_H
 
 #include "c_types.h"
-#include "windows_t.h"
+#include "win_types.h"
 
 #define DOS_HEADER_SIZE 64
 
