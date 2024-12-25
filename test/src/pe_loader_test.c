@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "build.h"
 #include "c_types.h"
+#include "win_types.h"
 #include "lib_memory.h"
 #include "hash_api.h"
 #include "random.h"
@@ -40,7 +41,7 @@ bool TestInitPELoader()
     // Read PE image file
     LPSTR file;
 #ifdef _WIN64
-    // file = "image\\x64\\ucrtbase_main.exe";
+    file = "image\\x64\\ucrtbase_main.exe";
     // file = "image\\x64\\ucrtbase_wmain.exe";
     // file = "image\\x64\\go.exe";
     file = "image\\x64\\rust_msvc.exe";
@@ -84,6 +85,7 @@ bool TestInitPELoader()
         .StdInput     = NULL,
         .StdOutput    = NULL,
         .StdError     = NULL,
+        .AllowSkipDLL = true,
 
         .NotEraseInstruction = true,
         .NotAdjustProtect    = false,
@@ -136,7 +138,7 @@ bool TestPELoader_Execute()
         printf_s("unexpected exit code: 0x%zX\n", exitCode);
         return false;
     }
-    runtime->Thread.Sleep(5000);
+    runtime->Thread.Sleep(3000);
 
     errno errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
@@ -160,7 +162,7 @@ bool TestPELoader_Exit()
         printf_s("unexpected exit code: 0x%zX\n", exitCode);
         return false;
     }
-    runtime->Thread.Sleep(5000);
+    runtime->Thread.Sleep(3000);
 
     errno errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
@@ -184,7 +186,7 @@ bool TestPELoader_Destroy()
         printf_s("unexpected exit code: 0x%zX\n", exitCode);
         return false;
     }
-    runtime->Thread.Sleep(5000);
+    runtime->Thread.Sleep(3000);
 
     errno errno = pe_loader->Destroy();
     if (errno != NO_ERROR)
