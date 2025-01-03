@@ -224,14 +224,26 @@ static void* loadImageFromEmbed(Runtime_M* runtime, byte* config)
     switch (mode)
     {
     case EMBED_DISABLE_COMPRESS:
+      {
         uint32 size = *(uint32*)config;
         void* buf = runtime->Memory.Alloc(size);
         mem_copy(buf, config + 4, size);
         return buf;
+      }
     case EMBED_ENABLE_COMPRESS:
-        // TODO
-        // runtime->Compressor.Decompress();
-        return config;
+      {
+        uint32 rawSize = *(uint32*)(config+0);
+        uint32 comSize = *(uint32*)(config+4);
+        byte*  comData = (byte*)(config+8);
+        void* buf = runtime->Memory.Alloc(rawSize);
+        uint size = runtime->Compressor.Decompress(buf, comData, comSize);
+        if (size != (uint)rawSize)
+        {
+            SetLastErrno(ERR_INVALID_COMPRESS_DATA);
+            return NULL;
+        }
+        return buf;
+      }
     default:
         SetLastErrno(ERR_INVALID_EMBED_CONFIG);
         return NULL;
