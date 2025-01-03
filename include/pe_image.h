@@ -78,22 +78,22 @@ typedef struct {
     WORD  MinorOperatingSystemVersion;
     WORD  MajorImageVersion;
     WORD  MinorImageVersion;          
-	WORD  MajorSubsystemVersion;
+    WORD  MajorSubsystemVersion;
     WORD  MinorSubsystemVersion;      
-	DWORD Win32VersionValue;      
-	DWORD SizeOfImage;          
-	DWORD SizeOfHeaders;
+    DWORD Win32VersionValue;      
+    DWORD SizeOfImage;          
+    DWORD SizeOfHeaders;
     DWORD CheckSum;             
-	WORD  Subsystem;                  
-	WORD  DllCharacteristics;
+    WORD  Subsystem;                  
+    WORD  DllCharacteristics;
     DWORD SizeOfStackReserve;        
-	DWORD SizeOfStackCommit;        
-	DWORD SizeOfHeapReserve;         
-	DWORD SizeOfHeapCommit;         
-	DWORD LoaderFlags;          
+    DWORD SizeOfStackCommit;        
+    DWORD SizeOfHeapReserve;         
+    DWORD SizeOfHeapCommit;         
+    DWORD LoaderFlags;          
     DWORD NumberOfRvaAndSizes;
 
-	Image_DataDirectory DataDirectory[16];
+    Image_DataDirectory DataDirectory[16];
 } OptionalHeader32;
 
 typedef struct {
@@ -114,11 +114,11 @@ typedef struct {
     WORD  MinorImageVersion;
     WORD  MajorSubsystemVersion;
     WORD  MinorSubsystemVersion;      
-	DWORD Win32VersionValue;      
-	DWORD SizeOfImage;          
-	DWORD SizeOfHeaders;
+    DWORD Win32VersionValue;      
+    DWORD SizeOfImage;          
+    DWORD SizeOfHeaders;
     DWORD CheckSum;              
-	WORD  Subsystem;
+    WORD  Subsystem;
     WORD  DllCharacteristics;
     QWORD SizeOfStackReserve;
     QWORD SizeOfStackCommit;
