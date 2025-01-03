@@ -41,7 +41,6 @@ typedef struct {
     GetCommandLineW_t       GetCommandLineW;
     LocalFree_t             LocalFree;
     GetStdHandle_t          GetStdHandle;
-    ExitProcess_t           ExitProcess;
 
     // loader context
     void*  MainMemPage; // store all structures
@@ -135,7 +134,7 @@ static bool  ldr_process_delay_import();
 static void  ldr_alloc_tls_block();
 static void  ldr_free_tls_block();
 static void  ldr_tls_callback(DWORD dwReason);
-static errno ldr_exit_process(UINT uExitCode);
+static void  ldr_exit_process(UINT uExitCode);
 static void  ldr_epilogue();
 
 static void pe_entry_point();
@@ -329,7 +328,6 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0x701EF754FFADBDC2, 0x6D5BE783B0AF5812 }, // GetCommandLineW
         { 0xFCB18A0B702E8AB9, 0x8E1D5AE1A2FD9196 }, // LocalFree
         { 0x599C793AB3F4599E, 0xBBBA4AE31D6A6D8F }, // GetStdHandle
-        { 0x131A9BBD85CB5E0D, 0x5126E3CBD1E0DB9A }, // ExitProcess
     };
 #elif _WIN32
     {
@@ -350,7 +348,6 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0xC15EF07A, 0x47A945CE }, // GetCommandLineW
         { 0x36B1013C, 0x0852225B }, // LocalFree    
         { 0xAE68A468, 0xD611C7F0 }, // GetStdHandle
-        { 0x0C5D0A6C, 0xDB58404D }, // ExitProcess
     };
 #endif
     for (int i = 0; i < arrlen(list); i++)
@@ -380,7 +377,6 @@ static bool initPELoaderAPI(PELoader* loader)
     loader->GetCommandLineW       = list[0x0E].proc;
     loader->LocalFree             = list[0x0F].proc;
     loader->GetStdHandle          = list[0x10].proc;
-    loader->ExitProcess           = list[0x11].proc;
     return true;
 }
 
@@ -1283,9 +1279,13 @@ static void ldr_tls_callback(DWORD dwReason)
     }
 }
 
-static errno ldr_exit_process(UINT uExitCode)
+static void ldr_exit_process(UINT uExitCode)
 {
     PELoader* loader = getPELoaderPointer();
+
+    dbg_log("[PE Loader]", "call ldr_exit_process: 0x%zX", uExitCode);
+
+    loader->Runtime->Core.Cleanup();
 
     // make callback about DLL_PROCESS_DETACH
     if (loader->IsDLL)
@@ -1293,25 +1293,12 @@ static errno ldr_exit_process(UINT uExitCode)
         pe_dll_main(DLL_PROCESS_DETACH, true);
     }
 
-    // call ExitProcess for terminate all threads
-    errno errno = NO_ERROR;
-    for (;;)
-    {
-        // create a thread for call ExitProcess
-        void* addr = GetFuncAddr(&hook_ExitProcess);
-        void* para = (LPVOID)(uExitCode);
-        HANDLE hThread = loader->CreateThread(NULL, 0, addr, para, 0, NULL);
-        if (hThread == NULL)
-        {
-            errno = ERR_LOADER_CREATE_EXIT_THREAD;
-            break;
-        }
-        // wait exit process thread exit
-        loader->WaitForSingleObject(hThread, INFINITE);
-        loader->CloseHandle(hThread);
-        break;
-    }
-    return errno;
+    // execute TLS callback list befor call ExitThread.
+    ldr_tls_callback(DLL_PROCESS_DETACH);
+
+    clean_run_data();
+    set_exit_code(uExitCode);
+    set_running(false);
 }
 
 __declspec(noinline)
@@ -1509,12 +1496,12 @@ void hook_ExitProcess(UINT uExitCode)
 
     dbg_log("[PE Loader]", "ExitProcess: %zu", uExitCode);
 
+    loader->Runtime->Core.Cleanup();
+
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
     ldr_free_tls_block();
 
-    loader->ExitProcess(uExitCode);
-    
     clean_run_data();
     set_exit_code(uExitCode);
     set_running(false);
@@ -1963,7 +1950,9 @@ errno LDR_Execute()
             if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
             {
                 errno = ERR_LOADER_CALL_DLL_MAIN;
+                break;
             }
+            set_running(true);
             break;
         }
         // change the running status
@@ -1998,24 +1987,21 @@ skip:
 __declspec(noinline)
 errno LDR_Exit(uint exitCode)
 {
-    PELoader* loader = getPELoaderPointer();
-
     if (!ldr_lock())
     {
         return ERR_LOADER_LOCK;
     }
 
-    errno errno = NO_ERROR;
-    if (is_running() || loader->IsDLL)
+    if (is_running())
     {
-        errno = ldr_exit_process(exitCode);
+        ldr_exit_process(exitCode);
     }
 
     if (!ldr_unlock())
     {
         return ERR_LOADER_UNLOCK;
     }
-    return errno;
+    return NO_ERROR;
 }
 
 __declspec(noinline)
@@ -2028,17 +2014,12 @@ errno LDR_Destroy()
         return ERR_LOADER_LOCK;
     }
 
-    errno err = NO_ERROR;
-
     if (is_running())
     {
-        errno eep = ldr_exit_process(0);
-        if (eep != NO_ERROR && err == NO_ERROR)
-        {
-            err = eep;
-        }
+        ldr_exit_process(0);
     }
 
+    errno err = NO_ERROR;
     if (!loader->Config.NotEraseInstruction)
     {
         DWORD oldProtect;
