@@ -8,6 +8,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 
 	github.com/RSSU-Shellcode/GRT-Config v0.0.0-20241206110444-be3c058959b6
+
+	golang.org/x/sys v0.28.0
 )
 
 require (
