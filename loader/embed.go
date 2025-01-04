@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/bovarysme/lzss"
+	"github.com/For-ACGN/LZSS"
 )
 
 // disable compress
@@ -32,22 +32,43 @@ const (
 
 // Embed is the embed mode.
 type Embed struct {
-	Image    []byte
-	Compress bool
+	image []byte
+
+	compress   bool
+	windowSize int
+
+	preCompress bool
+	rawSize     int
 }
 
 // NewEmbed is used to create image config with embed mode.
-func NewEmbed(image []byte, compress bool) Image {
+func NewEmbed(image []byte) Image {
+	return &Embed{image: image}
+}
+
+// NewEmbedCompress is used to create embed with compression.
+func NewEmbedCompress(image []byte, windowSize int) Image {
 	return &Embed{
-		Image:    image,
-		Compress: compress,
+		image:      image,
+		compress:   true,
+		windowSize: windowSize,
+	}
+}
+
+// NewEmbedPreCompress is used to create embed with pre-compression.
+func NewEmbedPreCompress(image []byte, rawSize int) Image {
+	return &Embed{
+		image:       image,
+		compress:    true,
+		preCompress: true,
+		rawSize:     rawSize,
 	}
 }
 
 // Encode implement Image interface.
 func (e *Embed) Encode() ([]byte, error) {
 	// check PE image
-	_, err := pe.NewFile(bytes.NewReader(e.Image))
+	_, err := pe.NewFile(bytes.NewReader(e.image))
 	if err != nil {
 		return nil, fmt.Errorf("invalid PE image: %s", err)
 	}
@@ -55,34 +76,36 @@ func (e *Embed) Encode() ([]byte, error) {
 	// write the mode
 	config.WriteByte(modeEmbed)
 	// need use compress mode
-	if !e.Compress {
-		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.Image)))
+	if !e.compress {
+		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image)))
 		config.WriteByte(disableCompress)
 		config.Write(size)
-		config.Write(e.Image)
+		config.Write(e.image)
 		return config.Bytes(), nil
 	}
 	// set the compressed flag
 	config.WriteByte(enableCompress)
 	// compress PE image
-	buf := bytes.NewBuffer(make([]byte, 0, len(e.Image)/2))
-	w := lzss.NewWriter(buf)
-	_, err = w.Write(e.Image)
-	if err != nil {
-		return nil, err
-	}
-	err = w.Close()
-	if err != nil {
-		return nil, err
+	var (
+		compressed []byte
+		rawSize    int
+	)
+	if !e.preCompress {
+		compressed, err = lzss.Compress(e.image, e.windowSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compress PE image: %s", err)
+		}
+		rawSize = len(e.image)
+	} else {
+		compressed = e.image
+		rawSize = e.rawSize
 	}
 	// write raw size
-	size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.Image)))
-	config.Write(size)
+	config.Write(binary.LittleEndian.AppendUint32(nil, uint32(rawSize)))
 	// write compressed size
-	size = binary.LittleEndian.AppendUint32(nil, uint32(buf.Len()))
-	config.Write(size)
+	config.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(compressed))))
 	// write compressed PE image
-	config.Write(buf.Bytes())
+	config.Write(compressed)
 	return config.Bytes(), nil
 }
 
