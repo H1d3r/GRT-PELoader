@@ -95,5 +95,3 @@ func TestCreateInstance(t *testing.T) {
 		require.Nil(t, inst)
 	})
 }
-
-// TODO test instance
