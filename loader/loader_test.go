@@ -71,7 +71,7 @@ func TestCreateInstance(t *testing.T) {
 	})
 
 	t.Run("invalid image config", func(t *testing.T) {
-		embed := NewEmbed([]byte{0x00}, false)
+		embed := NewEmbed([]byte{0x00})
 
 		inst, err := CreateInstance(testTplX86, 32, embed, nil)
 		errStr := "invalid embed mode config: invalid PE image: EOF"
