@@ -2,6 +2,8 @@ package loader
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/For-ACGN/LZSS"
@@ -76,5 +78,84 @@ func TestEmbedPreCompress(t *testing.T) {
 		require.Less(t, len(config), len(image))
 
 		spew.Dump(config)
+	})
+}
+
+func TestEmbedInstance(t *testing.T) {
+	opts := &Options{
+		ImageName:    "test.exe",
+		CommandLine:  "-p1 123 -p2 \"hello\"",
+		WaitMain:     true,
+		AllowSkipDLL: true,
+	}
+
+	items := []struct {
+		path string
+		wait bool
+	}{
+		{"go.exe", false},
+		{"rust_msvc.exe", true},
+		{"ucrtbase_main.exe", true},
+		{"ucrtbase_wmain.exe", true},
+	}
+
+	t.Run("x86", func(t *testing.T) {
+		if runtime.GOOS != "windows" || runtime.GOARCH != "386" {
+			return
+		}
+
+		for _, item := range items {
+			path := filepath.Join("../test/image/x86", item.path)
+			image, err := os.ReadFile(path)
+			require.NoError(t, err)
+			opts.WaitMain = item.wait
+
+			preCompressed, err := lzss.Compress(image, 2048)
+			require.NoError(t, err)
+			embed1 := NewEmbed(image)
+			embed2 := NewEmbedCompress(image, 2048)
+			embed3 := NewEmbedPreCompress(preCompressed, len(image))
+
+			for _, img := range []Image{
+				embed1, embed2, embed3,
+			} {
+				inst, err := CreateInstance(testTplX86, 32, img, opts)
+				require.NoError(t, err)
+
+				addr := loadShellcode(t, inst)
+				ret, _, _ := syscallN(addr)
+				require.NotEqual(t, uintptr(0), ret)
+			}
+		}
+	})
+
+	t.Run("x64", func(t *testing.T) {
+		if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+			return
+		}
+
+		for _, item := range items {
+			path := filepath.Join("../test/image/x64", item.path)
+			image, err := os.ReadFile(path)
+			require.NoError(t, err)
+			opts.WaitMain = item.wait
+
+			preCompressed, err := lzss.Compress(image, 2048)
+			require.NoError(t, err)
+			embed1 := NewEmbed(image)
+			embed2 := NewEmbedCompress(image, 2048)
+			embed3 := NewEmbedPreCompress(preCompressed, len(image))
+
+			for _, img := range []Image{
+				embed1, embed2, embed3,
+			} {
+				inst, err := CreateInstance(testTplX64, 64, img, opts)
+				require.NoError(t, err)
+
+				addr := loadShellcode(t, inst)
+				ret, _, _ := syscallN(addr)
+				require.NotEqual(t, uintptr(0), ret)
+			}
+		}
 	})
 }
