@@ -9,19 +9,19 @@ import (
 	"github.com/For-ACGN/LZSS"
 )
 
-// disable compress
-// +-----------+----------+--------+-------+
-// | mode flag | compress |  size  | image |
-// +-----------+----------+--------+-------+
-// |   byte    |   bool   | uint32 |  var  |
-// +-----------+----------+--------+-------+
-
-// enable compress
+// enable compression
 // +-----------+----------+----------+-----------------+-------+
 // | mode flag | compress | raw size | compressed size | image |
 // +-----------+----------+----------+-----------------+-------+
 // |   byte    |   bool   |  uint32  |     uint32      |  var  |
 // +-----------+----------+----------+-----------------+-------+
+
+// disable compression
+// +-----------+----------+--------+-------+
+// | mode flag | compress |  size  | image |
+// +-----------+----------+--------+-------+
+// |   byte    |   bool   | uint32 |  var  |
+// +-----------+----------+--------+-------+
 
 const modeEmbed = 1
 
@@ -67,8 +67,12 @@ func NewEmbedPreCompress(image []byte, rawSize int) Image {
 
 // Encode implement Image interface.
 func (e *Embed) Encode() ([]byte, error) {
-	// check PE image
-	_, err := pe.NewFile(bytes.NewReader(e.image))
+	// check PE image is valid
+	image := e.image
+	if e.preCompress {
+		image = lzss.Decompress(image, e.rawSize)
+	}
+	_, err := pe.NewFile(bytes.NewReader(image))
 	if err != nil {
 		return nil, fmt.Errorf("invalid PE image: %s", err)
 	}
