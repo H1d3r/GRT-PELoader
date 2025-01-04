@@ -60,9 +60,19 @@ func TestCreateInstance(t *testing.T) {
 		require.NotNil(t, inst)
 	})
 
-	t.Run("with arg wait main", func(t *testing.T) {
+	t.Run("with wait main", func(t *testing.T) {
 		opts := Options{
 			WaitMain: true,
+		}
+
+		inst, err := CreateInstance(testTplX86, 32, file, &opts)
+		require.NoError(t, err)
+		require.NotNil(t, inst)
+	})
+
+	t.Run("with allow skip dll", func(t *testing.T) {
+		opts := Options{
+			AllowSkipDLL: true,
 		}
 
 		inst, err := CreateInstance(testTplX86, 32, file, &opts)

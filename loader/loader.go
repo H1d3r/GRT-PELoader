@@ -37,6 +37,9 @@ type Options struct {
 	// wait main thread exit, if it is an exe image.
 	WaitMain bool
 
+	// if failed to load library, can continue it.
+	AllowSkipDLL bool
+
 	// set standard handles for hook GetStdHandle,
 	// if them are NULL, call original GetStdHandle.
 	StdInput  uint64
@@ -76,10 +79,15 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		cmdLineA = []byte(cmdLine)
 		cmdLineW = []byte(stringToUTF16(cmdLine))
 	}
-	// process wait main
-	argWait := make([]byte, 1)
+	// process WaitMain
+	waitMain := make([]byte, 1)
 	if opts.WaitMain {
-		argWait[0] = 1
+		waitMain[0] = 1
+	}
+	// process AllowSkipDLL
+	allowSkipDLL := make([]byte, 1)
+	if opts.AllowSkipDLL {
+		allowSkipDLL[0] = 1
 	}
 	// process standard handle
 	stdInput := binary.LittleEndian.AppendUint64(nil, opts.StdInput)
@@ -99,9 +107,8 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
 	}
 	args := [][]byte{
-		config,
-		cmdLineA, cmdLineW,
-		argWait,
+		config, cmdLineA, cmdLineW,
+		waitMain, allowSkipDLL,
 		stdInput, stdOutput, stdError,
 	}
 	stub, err := argument.Encode(args...)
