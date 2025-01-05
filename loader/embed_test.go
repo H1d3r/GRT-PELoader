@@ -89,22 +89,12 @@ func TestEmbedInstance(t *testing.T) {
 		AllowSkipDLL: true,
 	}
 
-	items := []struct {
-		path string
-		wait bool
-	}{
-		{"go.exe", false},
-		{"rust_msvc.exe", true},
-		{"ucrtbase_main.exe", true},
-		{"ucrtbase_wmain.exe", true},
-	}
-
 	t.Run("x86", func(t *testing.T) {
 		if runtime.GOOS != "windows" || runtime.GOARCH != "386" {
 			return
 		}
 
-		for _, item := range items {
+		for _, item := range images {
 			path := filepath.Join("../test/image/x86", item.path)
 			image, err := os.ReadFile(path)
 			require.NoError(t, err)
@@ -134,7 +124,7 @@ func TestEmbedInstance(t *testing.T) {
 			return
 		}
 
-		for _, item := range items {
+		for _, item := range images {
 			path := filepath.Join("../test/image/x64", item.path)
 			image, err := os.ReadFile(path)
 			require.NoError(t, err)

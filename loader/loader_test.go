@@ -24,6 +24,17 @@ func init() {
 	}
 }
 
+var images = []struct {
+	path string
+	wait bool
+}{
+	{"go.exe", false},
+	{"rust_msvc.exe", true},
+	// {"rust_gnu.exe", true},
+	{"ucrtbase_main.exe", true},
+	{"ucrtbase_wmain.exe", true},
+}
+
 func TestCreateInstance(t *testing.T) {
 	file := NewFile(testFilePath)
 
