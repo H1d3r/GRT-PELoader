@@ -10,7 +10,8 @@ cd ..
 
 echo ===============build Rust example===============
 cd rust
-call build.bat
+call build_msvc.bat
+call build_gnu.bat
 cd ..
 
 echo finished
