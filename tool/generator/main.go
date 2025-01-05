@@ -13,14 +13,17 @@ import (
 )
 
 var (
-	tplDir   string
-	mode     string
-	arch     int
-	pePath   string
-	options  loader.Options
-	compress bool
-	httpOpts loader.HTTPOptions
-	outPath  string
+	tplDir string
+	mode   string
+	arch   int
+	pePath string
+
+	options   loader.Options
+	compress  bool
+	comWindow int
+	httpOpts  loader.HTTPOptions
+
+	outPath string
 )
 
 func init() {
@@ -31,7 +34,9 @@ func init() {
 	flag.StringVar(&options.ImageName, "im", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
+	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&compress, "compress", true, "compress image when use embed mode")
+	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
 	flag.StringVar(&outPath, "o", "output.bin", "set output file path")
 	option.Flag(&options.Runtime)
 	flag.Parse()
@@ -72,10 +77,12 @@ func main() {
 		}
 		if compress {
 			fmt.Println("enable PE image compression")
-			s := (len(peData) / (1024 * 1024)) + 1
+			s := (len(peData) / (2 * 1024 * 1024)) + 1
 			fmt.Printf("please wait for about %d seconds for compress\n", s)
+			image = loader.NewEmbedCompress(peData, comWindow)
+		} else {
+			image = loader.NewEmbed(peData)
 		}
-		image = loader.NewEmbed(peData, compress)
 	case "file":
 		fmt.Println("use local file mode")
 		image = loader.NewFile(pePath)
