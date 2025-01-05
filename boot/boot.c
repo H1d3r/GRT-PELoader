@@ -46,6 +46,7 @@ PELoader_M* Boot()
         .CommandLineA = NULL,
         .CommandLineW = NULL,
         .WaitMain     = false,
+        .AllowSkipDLL = false,
         .StdInput     = NULL,
         .StdOutput    = NULL,
         .StdError     = NULL,
@@ -155,7 +156,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_CMDLINE_W;
     }
-    // load wait main, it must be true of false
+    // load WaitMain, it must be true of false
     if (!runtime->Argument.GetValue(ARG_IDX_WAIT_MAIN, &config->WaitMain, &size))
     {
         return ERR_NOT_FOUND_WAIT_MAIN;
@@ -163,6 +164,15 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     if (size != sizeof(bool))
     {
         return ERR_INVALID_WAIT_MAIN;
+    }
+    // load AllowSkipDLL, it must be true of false
+    if (!runtime->Argument.GetValue(ARG_IDX_ALLOW_SKIP_DLL, &config->AllowSkipDLL, &size))
+    {
+        return ERR_NOT_FOUND_ALLOW_SKIP_DLL;
+    }
+    if (size != sizeof(bool))
+    {
+        return ERR_INVALID_ALLOW_SKIP_DLL;
     }
     // load STD_INPUT_HANDLE, it can be zero
     if (!runtime->Argument.GetValue(ARG_IDX_STD_INPUT, &config->StdInput, &size))
@@ -293,6 +303,7 @@ static errno eraseArguments(Runtime_M* runtime)
     {
         ARG_IDX_PE_IMAGE,
         ARG_IDX_WAIT_MAIN,
+        ARG_IDX_ALLOW_SKIP_DLL,
         ARG_IDX_STD_INPUT,
         ARG_IDX_STD_OUTPUT,
         ARG_IDX_STD_ERROR,
