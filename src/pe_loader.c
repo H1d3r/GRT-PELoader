@@ -62,6 +62,8 @@ typedef struct {
     OptionalHeader   OptHeader;
 
     // store info need fixed when execute
+    uintptr ExportTable;
+    uint32  ExportTableSize;
     uintptr ImportTable;
     uint32  ImportTableSize;
     uintptr DelayImportTable;
@@ -88,6 +90,7 @@ typedef struct {
 } PELoader;
 
 // PE loader methods
+void* LDR_GetProcAddress(LPSTR name);
 errno LDR_Execute();
 errno LDR_Exit(uint exitCode);
 errno LDR_Destroy();
@@ -103,7 +106,7 @@ static PELoader* getPELoaderPointer();
 static bool ldr_lock();
 static bool ldr_unlock();
 
-static void* allocPELoaderMemPage(PELoader_Cfg* cfg);
+static void* allocPELoaderMemPage(PELoader_Cfg* config);
 static bool  initPELoaderAPI(PELoader* loader);
 static bool  lockMainMemPage(PELoader* loader);
 static bool  adjustPageProtect(PELoader* loader, DWORD* old);
@@ -117,6 +120,7 @@ static bool  checkPEImage(PELoader* loader);
 static bool  mapSections(PELoader* loader);
 static bool  fixRelocTable(PELoader* loader);
 static bool  initTLSDirectory(PELoader* loader);
+static void  prepareExportTable(PELoader* loader);
 static void  prepareImportTable(PELoader* loader);
 static void  prepareDelayImportTable(PELoader* loader);
 static bool  backupPEImage(PELoader* loader);
@@ -175,7 +179,7 @@ void      __cdecl hook_ucrtbase_exit(int exitcode);
 
 void loadCommandLineToArgv(PELoader* loader);
 
-PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* cfg)
+PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
 {
     if (!InitDebugger())
     {
@@ -183,7 +187,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* cfg)
         return NULL;
     }
     // alloc memory for store loader structure
-    void* memPage = allocPELoaderMemPage(cfg);
+    void* memPage = allocPELoaderMemPage(config);
     if (memPage == NULL)
     {
         SetLastErrno(ERR_LOADER_ALLOC_MEMORY);
@@ -198,7 +202,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* cfg)
     mem_init(loader, sizeof(PELoader));
     // store config and context
     loader->Runtime = runtime;
-    loader->Config  = *cfg;
+    loader->Config  = *config;
     loader->MainMemPage = memPage;
     // initialize loader
     DWORD oldProtect = 0;
@@ -277,7 +281,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* cfg)
     return module;
 }
 
-static void* allocPELoaderMemPage(PELoader_Cfg* cfg)
+static void* allocPELoaderMemPage(PELoader_Cfg* config)
 {
 #ifdef _WIN64
     uint hash = 0xEFE2E03329515B77;
@@ -286,7 +290,7 @@ static void* allocPELoaderMemPage(PELoader_Cfg* cfg)
     uint hash = 0xE0C5DD0C;
     uint key  = 0x1057DA5A;
 #endif
-    VirtualAlloc_t virtualAlloc = cfg->FindAPI(hash, key);
+    VirtualAlloc_t virtualAlloc = config->FindAPI(hash, key);
     if (virtualAlloc == NULL)
     {
         return NULL;
@@ -475,6 +479,7 @@ static errno loadPEImage(PELoader* loader)
     {
         return ERR_LOADER_INIT_TLS_DIRECTORY;
     }
+    prepareExportTable(loader);
     prepareImportTable(loader);
     prepareDelayImportTable(loader);
     dbg_log("[PE Loader]", "PE Image: 0x%zX", loader->PEImage);
@@ -696,6 +701,17 @@ static bool initTLSDirectory(PELoader* loader)
     // destroy table for prevent extract raw PE image
     RandBuffer((byte*)tlsTable, tableSize);
     return true;
+}
+
+static void prepareExportTable(PELoader* loader)
+{
+    uintptr peImage = loader->PEImage;
+    uintptr dataDir = loader->DataDir;
+    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_EXPORT * PE_DATA_DIRECTORY_SIZE;
+    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
+
+    loader->ExportTable     = peImage + dd.VirtualAddress;
+    loader->ExportTableSize = dd.Size;
 }
 
 static void prepareImportTable(PELoader* loader)
@@ -1205,7 +1221,7 @@ static void ldr_alloc_tls_block()
 
     // store the original TLS block address
     uintptr block = *tlsPtr;
-    mem_copy(tls, &block, sizeof(tlsPtr));
+    mem_copy(tls, &block, sizeof(block));
 
     // replace the original TLS block address
     *tlsPtr = (uintptr)tls + 16;
@@ -1285,16 +1301,19 @@ static void ldr_exit_process(UINT uExitCode)
 
     dbg_log("[PE Loader]", "call ldr_exit_process: 0x%zX", uExitCode);
 
-    loader->Runtime->Core.Cleanup();
-
     // make callback about DLL_PROCESS_DETACH
     if (loader->IsDLL)
     {
-        pe_dll_main(DLL_PROCESS_DETACH, true);
+        pe_dll_main(DLL_PROCESS_DETACH, false);
     }
+
+    // TODO
+    // runtime->Thread.KillAll();
 
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
+
+    loader->Runtime->Core.Cleanup();
 
     clean_run_data();
     set_exit_code(uExitCode);
@@ -1492,15 +1511,19 @@ void hook_ExitThread(DWORD dwExitCode)
 __declspec(noinline)
 void hook_ExitProcess(UINT uExitCode)
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "ExitProcess: %zu", uExitCode);
 
-    loader->Runtime->Core.Cleanup();
+    // TODO
+    // runtime->Thread.KillAll();
 
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
     ldr_free_tls_block();
+
+    runtime->Core.Cleanup();
 
     clean_run_data();
     set_exit_code(uExitCode);
@@ -1901,6 +1924,39 @@ static void clean_run_data()
 }
 
 __declspec(noinline)
+void* LDR_GetProcAddress(LPSTR name)
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (!ldr_lock())
+    {
+        return NULL;
+    }
+
+    void* address = NULL;
+    errno lastErr = NO_ERROR;
+    for (;;)
+    {
+        if (!is_running())
+        {
+            break;
+        }
+
+
+
+        break;
+    }
+
+    if (!ldr_unlock())
+    {
+        return NULL;
+    }
+
+    SetLastErrno(lastErr);
+    return address;
+}
+
+__declspec(noinline)
 errno LDR_Execute()
 {
     PELoader* loader = getPELoaderPointer();
@@ -1911,14 +1967,12 @@ errno LDR_Execute()
     }
 
     errno errno = NO_ERROR;
-
-    if (is_running())
-    {
-        goto skip;
-    }
-
     for (;;)
     {
+        if (is_running())
+        {
+            break;
+        }
         errno = ldr_init_mutex();
         if (errno != NO_ERROR)
         {
@@ -1976,7 +2030,6 @@ errno LDR_Execute()
         break;
     }
 
-skip:
     if (!ldr_unlock())
     {
         return ERR_LOADER_UNLOCK;
