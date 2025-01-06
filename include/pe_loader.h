@@ -27,14 +27,14 @@ typedef struct {
     // wait main thread exit if it is a exe image.
     bool WaitMain;
 
+    // if failed to load library, can continue it.
+    bool AllowSkipDLL;
+
     // set standard handles for hook GetStdHandle,
     // if them are NULL, call original GetStdHandle.
     HANDLE StdInput;
     HANDLE StdOutput;
     HANDLE StdError;
-
-    // if failed to load library, can continue it.
-    bool AllowSkipDLL;
 
     // not erase instructions after call functions about Init or Exit.
     bool NotEraseInstruction;
