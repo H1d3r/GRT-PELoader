@@ -272,6 +272,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     PELoader_M* module = (PELoader_M*)moduleAddr;
     // process variables
     module->EntryPoint = (void*)(loader->EntryPoint);
+    module->IsDLL      = loader->IsDLL;
     module->ExitCode   = 0;
     // loader module methods
     module->GetProc = GetFuncAddr(&LDR_GetProc);
@@ -1052,15 +1053,31 @@ static void* ldr_process_export(LPSTR name)
 {
     PELoader* loader = getPELoaderPointer();
 
-    uintptr peImage = loader->PEImage;
+    uintptr peImage     = loader->PEImage;
     uintptr exportTable = loader->ExportTable;
-    uint32  tableSize = loader->ExportTableSize;
+    uint32  tableSize   = loader->ExportTableSize;
     // check need process export
     if (tableSize == 0)
     {
         return NULL;
     }
-    // Image_ExportDirectory* export = (Image_ExportDirectory*)(exportTable);
+    Image_ExportDirectory* export = (Image_ExportDirectory*)(exportTable);
+    DWORD base = export->Base;
+    DWORD* aof = (DWORD*)(peImage + export->AddressOfFunctions);
+    DWORD* aon = (DWORD*)(peImage + export->AddressOfNames);
+    WORD*  aoo = (WORD* )(peImage + export->AddressOfNameOrdinals);
+    if (name < (LPSTR)(export->NumberOfFunctions))
+    {
+        return (void*)(peImage + aof[export->Base+(uint32)(name)]);
+    }
+    for (uint32 i = 0; i < export->NumberOfNames; i++)
+    {
+        LPSTR fn = (LPSTR)(peImage + aon[export->Base+i]);
+        if (strcmp_a(fn, name) == 0)
+        {
+            return (void*)(peImage + aof[aoo[export->Base+i]]);
+        }
+    }
     return NULL;
 }
 
