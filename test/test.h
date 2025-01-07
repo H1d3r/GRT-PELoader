@@ -13,7 +13,8 @@ PELoader_M* pe_loader;
 #pragma warning(push)
 #pragma warning(disable: 4276)
 bool TestInitPELoader();
-bool TestPELoader_Execute();
+bool TestPELoader_EXE();
+bool TestPELoader_DLL();
 bool TestPELoader_Exit();
 bool TestPELoader_Destroy();
 #pragma warning(pop)
@@ -24,7 +25,8 @@ typedef struct { byte* Name; test_t Test; } unit;
 static unit tests[] = 
 {
     { "InitPELoader",     TestInitPELoader     },
-    { "PELoader_Execute", TestPELoader_Execute },
+    { "PELoader_EXE",     TestPELoader_EXE     },
+    { "PELoader_DLL",     TestPELoader_DLL     },
     { "PELoader_Exit",    TestPELoader_Exit    },
     { "PELoader_Destroy", TestPELoader_Destroy },
 };
