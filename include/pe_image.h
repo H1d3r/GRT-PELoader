@@ -94,7 +94,7 @@ typedef struct {
     DWORD NumberOfRvaAndSizes;
 
     Image_DataDirectory DataDirectory[16];
-} OptionalHeader32;
+} Image_OptionalHeader32;
 
 typedef struct {
     WORD  Magic;
@@ -128,13 +128,26 @@ typedef struct {
     DWORD NumberOfRvaAndSizes;
 
     Image_DataDirectory DataDirectory[16];
-} OptionalHeader64;
+} Image_OptionalHeader64;
 
 #ifdef _WIN64
-    typedef OptionalHeader64 OptionalHeader;
+    typedef Image_OptionalHeader64 Image_OptionalHeader;
 #elif _WIN32
-    typedef OptionalHeader32 OptionalHeader;
+    typedef Image_OptionalHeader32 Image_OptionalHeader;
 #endif
+
+typedef struct {
+    BYTE  Name[8];
+    DWORD VirtualSize;
+    DWORD VirtualAddress;
+    DWORD SizeOfRawData;
+    DWORD PointerToRawData;
+	DWORD PointerToRelocations;
+    DWORD PointerToLineNumbers;
+    WORD  NumberOfRelocations;
+    WORD  NumberOfLineNumbers;
+    DWORD Characteristics;
+} Image_SectionHeader;
 
 typedef struct {
     DWORD OriginalFirstThunk;
