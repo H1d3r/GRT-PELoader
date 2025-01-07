@@ -8,6 +8,7 @@
 #include "errno.h"
 #include "runtime.h"
 
+typedef void* (*GetProc_t)(LPSTR name);
 typedef errno (*Execute_t)();
 typedef errno (*Exit_t)(uint exitCode);
 typedef errno (*Destroy_t)();
@@ -49,6 +50,9 @@ typedef struct {
 
     // main thread return value or argument about call ExitProcess.
     uint ExitCode;
+
+    // get export method address if PE image is a DLL.
+    GetProc_t GetProc;
 
     // create a thread at EntryPoint, it can call multi times.
     Execute_t Execute;
