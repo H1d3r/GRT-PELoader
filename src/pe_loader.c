@@ -58,8 +58,8 @@ typedef struct {
     uintptr Section;
 
     // store PE image NT header
-    Image_FileHeader FileHeader;
-    OptionalHeader   OptHeader;
+    Image_FileHeader     FileHeader;
+    Image_OptionalHeader OptHeader;
 
     // store info need fixed when execute
     uintptr ExportTable;
@@ -90,7 +90,7 @@ typedef struct {
 } PELoader;
 
 // PE loader methods
-void* LDR_GetProcAddress(LPSTR name);
+void* LDR_GetProc(LPSTR name);
 errno LDR_Execute();
 errno LDR_Exit(uint exitCode);
 errno LDR_Destroy();
@@ -133,6 +133,7 @@ static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName);
 static errno ldr_init_mutex();
 static bool  ldr_copy_image();
+static void* ldr_process_export(LPSTR name);
 static bool  ldr_process_import();
 static bool  ldr_process_delay_import();
 static void  ldr_alloc_tls_block();
@@ -273,6 +274,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->EntryPoint = (void*)(loader->EntryPoint);
     module->ExitCode   = 0;
     // loader module methods
+    module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Execute = GetFuncAddr(&LDR_Execute);
     module->Exit    = GetFuncAddr(&LDR_Exit);
     module->Destroy = GetFuncAddr(&LDR_Destroy);
@@ -507,8 +509,10 @@ static bool parsePEImage(PELoader* loader)
     uintptr peBase = imageAddr + peOffset + NT_HEADER_SIGNATURE_SIZE;
     // parse FileHeader
     Image_FileHeader* fileHeader = (Image_FileHeader*)(peBase);
-    WORD characteristics = fileHeader->Characteristics;
+    // erase timestamp in file header
+    fileHeader->TimeDateStamp = 0;
     // check is a executable image
+    WORD characteristics = fileHeader->Characteristics;
     if (!(characteristics & IMAGE_FILE_EXECUTABLE_IMAGE))
     {
         return false;
@@ -516,15 +520,15 @@ static bool parsePEImage(PELoader* loader)
     // parse OptionalHeader
     uintptr headerAddr = peBase + sizeof(Image_FileHeader);
 #ifdef _WIN64
-    OptionalHeader* optHeader = (OptionalHeader64*)(headerAddr);
+    Image_OptionalHeader* optHeader = (Image_OptionalHeader64*)(headerAddr);
 #elif _WIN32
-    OptionalHeader* optHeader = (OptionalHeader32*)(headerAddr);
+    Image_OptionalHeader* optHeader = (Image_OptionalHeader32*)(headerAddr);
 #endif
     // calculate data directory offset
     uint16  ddOffset = arrlen(optHeader->DataDirectory) * sizeof(Image_DataDirectory);
-    uintptr dataDir  = headerAddr + sizeof(OptionalHeader) - ddOffset;
+    uintptr dataDir  = headerAddr + sizeof(Image_OptionalHeader) - ddOffset;
     // calculate the address of the first Section
-    uintptr section = headerAddr + sizeof(OptionalHeader);
+    uintptr section = headerAddr + sizeof(Image_OptionalHeader);
     // store result
     loader->DataDir    = dataDir;
     loader->EntryPoint = optHeader->AddressOfEntryPoint;
@@ -584,16 +588,16 @@ static bool mapSections(PELoader* loader)
     // map PE image sections to the memory
     uintptr peImage   = (uintptr)mem;
     uintptr imageAddr = (uintptr)(loader->Config.Image);
-    uintptr section   = loader->Section;
+    Image_SectionHeader* section = (Image_SectionHeader*)(loader->Section);
     for (uint16 i = 0; i < loader->FileHeader.NumberOfSections; i++)
     {
-        uint32 virtualAddress   = *(uint32*)(section + 12);
-        uint32 sizeOfRawData    = *(uint32*)(section + 16);
-        uint32 pointerToRawData = *(uint32*)(section + 20);
+        uint32 virtualAddress   = section->VirtualAddress;
+        uint32 sizeOfRawData    = section->SizeOfRawData;
+        uint32 pointerToRawData = section->PointerToRawData;
         byte* dst = (byte*)(peImage + virtualAddress);
         byte* src = (byte*)(imageAddr + pointerToRawData);
         mem_copy(dst, src, sizeOfRawData);
-        section += PE_SECTION_HEADER_SIZE;
+        section++;
     }
     // update EntryPoint absolute address
     loader->EntryPoint += peImage;
@@ -921,7 +925,7 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     PELoader* loader = getPELoaderPointer();
 
     // process ordinal import
-    if (lpProcName <= (LPCSTR)(0xFFFF))
+    if (lpProcName < (LPCSTR)(0xFFFF))
     {
         dbg_log("[PE Loader]", "GetProcAddressByOrdinal: %d", lpProcName);
         return loader->GetProcAddress(hModule, lpProcName);
@@ -1041,6 +1045,23 @@ static bool ldr_copy_image()
     mem_copy((void*)loader->PEImage, loader->PEBackup, loader->ImageSize);
 
     return loader->ReleaseMutex(loader->StatusMu);
+}
+
+__declspec(noinline)
+static void* ldr_process_export(LPSTR name)
+{
+    PELoader* loader = getPELoaderPointer();
+
+    uintptr peImage = loader->PEImage;
+    uintptr exportTable = loader->ExportTable;
+    uint32  tableSize = loader->ExportTableSize;
+    // check need process export
+    if (tableSize == 0)
+    {
+        return NULL;
+    }
+    // Image_ExportDirectory* export = (Image_ExportDirectory*)(exportTable);
+    return NULL;
 }
 
 __declspec(noinline)
@@ -1731,8 +1752,8 @@ void loadCommandLineToArgv(PELoader* loader)
     byte dllName[] = {
         's', 'h', 'e', 'l', 'l', '3', '2', '.', 'd', 'l', 'l', '\x00'
     };
-    HMODULE hModule = loader->LoadLibraryA(dllName);
-    if (hModule == NULL)
+    HMODULE hShell32 = loader->LoadLibraryA(dllName);
+    if (hShell32 == NULL)
     {
         return;
     }
@@ -1803,14 +1824,15 @@ void loadCommandLineToArgv(PELoader* loader)
     {
         loader->LocalFree(argv);
     }
-    // free shell32.dll
-    loader->FreeLibrary(hModule);
+    loader->FreeLibrary(hShell32);
 }
 
 __declspec(noinline)
 static void pe_entry_point()
 {
     PELoader* loader = getPELoaderPointer();
+
+    dbg_log("[PE Loader]", "call entry point");
 
     // execute TLS callback list before call EntryPoint.
     ldr_alloc_tls_block();
@@ -1827,6 +1849,8 @@ __declspec(noinline)
 static bool pe_dll_main(DWORD dwReason, bool setExitCode)
 {
     PELoader* loader = getPELoaderPointer();
+
+    dbg_log("[PE Loader]", "call DllMain with reason: %d", dwReason);
 
     // call dll main function
     DllMain_t dllMain = (DllMain_t)(loader->EntryPoint);
@@ -1924,10 +1948,8 @@ static void clean_run_data()
 }
 
 __declspec(noinline)
-void* LDR_GetProcAddress(LPSTR name)
+void* LDR_GetProc(LPSTR name)
 {
-    PELoader* loader = getPELoaderPointer();
-
     if (!ldr_lock())
     {
         return NULL;
@@ -1941,9 +1963,7 @@ void* LDR_GetProcAddress(LPSTR name)
         {
             break;
         }
-
-
-
+        address = ldr_process_export(name);
         break;
     }
 
