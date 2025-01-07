@@ -150,6 +150,20 @@ typedef struct {
 } Image_SectionHeader;
 
 typedef struct {
+   DWORD Characteristics;
+   DWORD TimeDateStamp;
+   WORD  MajorVersion;
+   WORD  MinorVersion;
+   DWORD Name;
+   DWORD Base;
+   DWORD NumberOfFunctions;
+   DWORD NumberOfNames;
+   DWORD AddressOfFunctions;
+   DWORD AddressOfNames;
+   DWORD AddressOfNameOrdinals;
+} Image_ExportDirectory;
+
+typedef struct {
     DWORD OriginalFirstThunk;
     DWORD TimeDateStamp;
     DWORD ForwarderChain;
