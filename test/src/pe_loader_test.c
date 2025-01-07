@@ -41,22 +41,25 @@ bool TestInitPELoader()
     // Read PE image file
     LPSTR file;
 #ifdef _WIN64
-    file = "image\\x64\\ucrtbase_main.exe";
-    // file = "image\\x64\\ucrtbase_wmain.exe";
     // file = "image\\x64\\go.exe";
     file = "image\\x64\\rust_msvc.exe";
+    // file = "image\\x64\\rust_gnu.exe";
+    // file = "image\\x64\\ucrtbase_main.exe";
+    // file = "image\\x64\\ucrtbase_wmain.exe";
 #elif _WIN32
-    file = "image\\x86\\ucrtbase_main.exe";
+    file = "image\\x86\\go.exe";
+    // file = "image\\x86\\rust_msvc.exe";
+    // file = "image\\x86\\rust_gnu.exe";
+    // file = "image\\x86\\ucrtbase_main.exe";
     // file = "image\\x86\\ucrtbase_wmain.exe";
-    // file = "image\\x86\\go.exe";
-    file = "image\\x86\\rust_msvc.exe";
 #endif
     // file = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\PowerShell.exe";
     // file = "C:\\Windows\\System32\\cmd.exe";
     // file = "C:\\Windows\\System32\\mscoree.dll";
-    // file = "C:\\Windows\\System32\\combase.dll";
     // file = "C:\\Windows\\System32\\ole32.dll";
     // file = "C:\\Windows\\System32\\oleaut32.dll";
+    // file = "C:\\Windows\\System32\\combase.dll";
+    file = "C:\\Windows\\System32\\ws2_32.dll";
 
     byte* buf; uint size;
     errno err = runtime->WinFile.ReadFileA(file, &buf, &size);
@@ -82,10 +85,10 @@ bool TestInitPELoader()
         .CommandLineA = cmdLineA,
         .CommandLineW = cmdLineW,
         .WaitMain     = true,
+        .AllowSkipDLL = true,
         .StdInput     = NULL,
         .StdOutput    = NULL,
         .StdError     = NULL,
-        .AllowSkipDLL = true,
 
         .NotEraseInstruction = true,
         .NotAdjustProtect    = false,
@@ -125,11 +128,15 @@ static void* copyShellcode()
     return mem;
 }
 
-bool TestPELoader_Execute()
+bool TestPELoader_EXE()
 {
     if (pe_loader == NULL)
     {
         return false;
+    }
+    if (pe_loader->IsDLL)
+    {
+        return true;
     }
 
     uint exitCode = pe_loader->Execute();
@@ -139,6 +146,41 @@ bool TestPELoader_Execute()
         return false;
     }
     runtime->Thread.Sleep(3000);
+
+    errno errno = pe_loader->Exit(0);
+    if (errno != NO_ERROR)
+    {
+        printf_s("failed to exit PE loader: 0x%X\n", errno);
+        return false;
+    }
+    return true;
+}
+
+bool TestPELoader_DLL()
+{
+    if (pe_loader == NULL)
+    {
+        return false;
+    }
+    if (!pe_loader->IsDLL)
+    {
+        return true;
+    }
+
+    uint exitCode = pe_loader->Execute();
+    if (exitCode != 0)
+    {
+        printf_s("unexpected exit code: 0x%zX\n", exitCode);
+        return false;
+    }
+
+    void* bind = pe_loader->GetProc("bind");
+    printf_s("address: 0x%zX\n", (uintptr)bind);
+    bind = pe_loader->GetProc(2);
+    printf_s("address: 0x%zX\n", (uintptr)bind);
+
+    runtime->Thread.Sleep(3000);
+
 
     errno errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
