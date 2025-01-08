@@ -1053,6 +1053,10 @@ static void* ldr_process_export(LPSTR name)
 {
     PELoader* loader = getPELoaderPointer();
 
+    if (name == NULL)
+    {
+        return NULL;
+    }
     uintptr peImage     = loader->PEImage;
     uintptr exportTable = loader->ExportTable;
     uint32  tableSize   = loader->ExportTableSize;
@@ -1062,23 +1066,37 @@ static void* ldr_process_export(LPSTR name)
         return NULL;
     }
     Image_ExportDirectory* export = (Image_ExportDirectory*)(exportTable);
-    DWORD base = export->Base;
     DWORD* aof = (DWORD*)(peImage + export->AddressOfFunctions);
     DWORD* aon = (DWORD*)(peImage + export->AddressOfNames);
     WORD*  aoo = (WORD* )(peImage + export->AddressOfNameOrdinals);
-    if (name < (LPSTR)(export->NumberOfFunctions))
+    DWORD base = export->Base;
+    DWORD ordi = (DWORD)(uintptr)(name);
+    // get procedure address by ordinal
+    if (ordi <= 0xFFFF)
     {
-        return (void*)(peImage + aof[export->Base+(uint32)(name)]);
+        if (ordi <= export->NumberOfFunctions)
+        {
+            return (void*)(peImage + (uintptr)(aof[ordi-base]));
+        }
+        return NULL;
     }
-    for (uint32 i = 0; i < export->NumberOfNames; i++)
+    // get procedure address by name
+    void* address = NULL;
+    for (uint32 i = 1; i <= export->NumberOfNames; i++)
     {
-        LPSTR fn = (LPSTR)(peImage + aon[export->Base+i]);
+        LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i-base]));
         if (strcmp_a(fn, name) == 0)
         {
-            return (void*)(peImage + aof[aoo[export->Base+i]]);
+            address = (void*)(peImage + (uintptr)(aof[aoo[i-base]]));
+            break;
         }
     }
-    return NULL;
+    if (address == NULL)
+    {
+        return NULL;
+    }
+    // check it is a forwarded export function
+    return address;
 }
 
 __declspec(noinline)
@@ -1973,7 +1991,6 @@ void* LDR_GetProc(LPSTR name)
     }
 
     void* address = NULL;
-    errno lastErr = NO_ERROR;
     for (;;)
     {
         if (!is_running())
@@ -1988,8 +2005,6 @@ void* LDR_GetProc(LPSTR name)
     {
         return NULL;
     }
-
-    SetLastErrno(lastErr);
     return address;
 }
 
