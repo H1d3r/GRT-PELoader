@@ -59,7 +59,7 @@ bool TestInitPELoader()
     // file = "C:\\Windows\\System32\\ole32.dll";
     // file = "C:\\Windows\\System32\\oleaut32.dll";
     // file = "C:\\Windows\\System32\\combase.dll";
-    file = "C:\\Windows\\System32\\ws2_32.dll";
+    // file = "C:\\Windows\\System32\\ws2_32.dll";
 
     byte* buf; uint size;
     errno err = runtime->WinFile.ReadFileA(file, &buf, &size);
@@ -174,13 +174,18 @@ bool TestPELoader_DLL()
         return false;
     }
 
-    void* bind = pe_loader->GetProc("bind");
-    printf_s("address: 0x%zX\n", (uintptr)bind);
-    bind = pe_loader->GetProc(2);
-    printf_s("address: 0x%zX\n", (uintptr)bind);
+    // test ws2_32.dll
+    // void* connect1 = pe_loader->GetProc("connect");
+    // printf_s("address1: 0x%zX\n", (uintptr)connect1);
+    // void* connect2 = pe_loader->GetProc((LPSTR)(4));
+    // printf_s("address2: 0x%zX\n", (uintptr)connect2);
+    // if (connect1 != connect2)
+    // {
+    //     printf_s("incorrect function address by name and ordinal\n");
+    //     return false;
+    // }
 
     runtime->Thread.Sleep(3000);
-
 
     errno errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
