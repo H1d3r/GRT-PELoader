@@ -4,8 +4,8 @@
 #include "dll_shell32.h"
 #include "dll_msvcrt.h"
 #include "dll_ucrtbase.h"
-#include "lib_string.h"
 #include "lib_memory.h"
+#include "lib_string.h"
 #include "rel_addr.h"
 #include "hash_api.h"
 #include "pe_image.h"
@@ -141,6 +141,8 @@ static void  ldr_free_tls_block();
 static void  ldr_tls_callback(DWORD dwReason);
 static void  ldr_exit_process(UINT uExitCode);
 static void  ldr_epilogue();
+
+static HMODULE ldr_load_module(LPSTR name);
 
 static void pe_entry_point();
 static bool pe_dll_main(DWORD dwReason, bool setExitCode);
@@ -1071,24 +1073,25 @@ static void* ldr_process_export(LPSTR name)
     WORD*  aoo = (WORD* )(peImage + export->AddressOfNameOrdinals);
     DWORD base = export->Base;
     DWORD ordi = (DWORD)(uintptr)(name);
-    // get procedure address by ordinal
+    // try to find procedure address
+    void* address = NULL;
     if (ordi <= 0xFFFF)
     {
+        // get procedure address by ordinal
         if (ordi <= export->NumberOfFunctions)
         {
-            return (void*)(peImage + (uintptr)(aof[ordi-base]));
+            address = (void*)(peImage + (uintptr)(aof[ordi-base]));
         }
-        return NULL;
-    }
-    // get procedure address by name
-    void* address = NULL;
-    for (uint32 i = 1; i <= export->NumberOfNames; i++)
-    {
-        LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i-base]));
-        if (strcmp_a(fn, name) == 0)
+    } else {
+        // get procedure address by name
+        for (uint32 i = 1; i <= export->NumberOfNames; i++)
         {
-            address = (void*)(peImage + (uintptr)(aof[aoo[i-base]]));
-            break;
+            LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i-base]));
+            if (strcmp_a(fn, name) == 0)
+            {
+                address = (void*)(peImage + (uintptr)(aof[aoo[i-base]]));
+                break;
+            }
         }
     }
     if (address == NULL)
@@ -1096,7 +1099,60 @@ static void* ldr_process_export(LPSTR name)
         return NULL;
     }
     // check it is a forwarded export function
-    return address;
+    DWORD funcRVA = (DWORD)((uintptr)address-peImage);
+    DWORD eatRVA  = (DWORD)(loader->ExportTable-peImage);
+    DWORD eatSize = (DWORD)(loader->ExportTableSize);
+    if (funcRVA < eatRVA || funcRVA >= eatRVA + eatSize)
+    {
+        return address;
+    }
+    // search the last "." in function name
+    byte* exportName = address;
+    byte* src = exportName;
+    uint  dot = 0;
+    for (uint j = 0;; j++)
+    {
+        byte b = *src;
+        if (b == '.')
+        {
+            dot = j;
+        }
+        if (b == 0x00)
+        {
+            break;
+        }
+        src++;
+    }
+    // use "mem_init" for prevent incorrect compiler
+    // optimize and generate incorrect shellcode
+    byte dllName[512];
+    mem_init(dllName, sizeof(dllName));
+    // prevent array bound when call mem_copy
+    if (dot > 500)
+    {
+        dot = 500;
+    }
+    mem_copy(dllName, exportName, dot + 1);
+    // build DLL name
+    dllName[dot+1] = 'd';
+    dllName[dot+2] = 'l';
+    dllName[dot+3] = 'l';
+    dllName[dot+4] = 0x00;
+    // load dll if it not loaded
+    HMODULE hModule = ldr_load_module(dllName);
+    if (hModule == NULL)
+    {
+        hModule = loader->LoadLibraryA(dllName);
+        dbg_log("[PE Loader]", "LoadLibrary: %s for forwarded function", dllName);
+    } else {
+        dbg_log("[PE Loader]", "Already LoadLibrary: %s forwarded function", dllName);
+    }
+    if (hModule == NULL)
+    {
+        return NULL;
+    }
+    LPCSTR procName = (LPCSTR)((uintptr)exportName + dot + 1);
+    return ldr_GetProcAddress(hModule, procName);
 }
 
 __declspec(noinline)
@@ -1174,8 +1230,7 @@ static bool ldr_process_import()
 __declspec(noinline)
 static bool ldr_process_delay_import()
 {
-    PELoader*  loader  = getPELoaderPointer();
-    Runtime_M* runtime = loader->Runtime;
+    PELoader* loader = getPELoaderPointer();
 
     uintptr peImage   = loader->PEImage;
     uintptr dlTable   = loader->DelayImportTable;
@@ -1193,14 +1248,8 @@ static bool ldr_process_delay_import()
             break;
         }
         // check the target DLL is loaded
-        LPSTR  dllName  = (LPSTR)(peImage + dld->DllNameRVA);
-        LPWSTR dllNameW = runtime->WinBase.ANSIToUTF16(dllName);
-        if (dllNameW == NULL)
-        {
-            return false;
-        }
-        HMODULE hModule = GetModuleHandle(dllNameW);
-        runtime->Memory.Free(dllNameW);
+        LPSTR   dllName = (LPSTR)(peImage + dld->DllNameRVA);
+        HMODULE hModule = ldr_load_module(dllName);
         if (hModule == NULL)
         {
             hModule = loader->LoadLibraryA(dllName);
@@ -1247,6 +1296,22 @@ static bool ldr_process_delay_import()
         dld++;
     }
     return true;
+}
+
+__declspec(noinline)
+static HMODULE ldr_load_module(LPSTR name)
+{
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
+
+    LPWSTR nameW = runtime->WinBase.ANSIToUTF16(name);
+    if (nameW == NULL)
+    {
+        return NULL;
+    }
+    HMODULE hModule = GetModuleHandle(nameW);
+    runtime->Memory.Free(nameW);
+    return hModule;
 }
 
 __declspec(noinline)
