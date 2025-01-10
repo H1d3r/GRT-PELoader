@@ -512,14 +512,14 @@ static bool parsePEImage(PELoader* loader)
     uintptr peBase = imageAddr + peOffset + NT_HEADER_SIGNATURE_SIZE;
     // parse FileHeader
     Image_FileHeader* fileHeader = (Image_FileHeader*)(peBase);
-    // erase timestamp in file header
-    fileHeader->TimeDateStamp = 0;
     // check is a executable image
     WORD characteristics = fileHeader->Characteristics;
     if (!(characteristics & IMAGE_FILE_EXECUTABLE_IMAGE))
     {
         return false;
     }
+    // erase timestamp in file header
+    fileHeader->TimeDateStamp = 0;
     // parse OptionalHeader
     uintptr headerAddr = peBase + sizeof(Image_FileHeader);
 #ifdef _WIN64
@@ -719,6 +719,14 @@ static void prepareExportTable(PELoader* loader)
 
     loader->ExportTable     = peImage + dd.VirtualAddress;
     loader->ExportTableSize = dd.Size;
+
+    // erase timestamp in PE image
+    if (loader->ExportTableSize == 0)
+    {
+        return;
+    }
+    Image_ExportDirectory* export = (Image_ExportDirectory*)(loader->ExportTable);
+    export->TimeDateStamp = 0;
 }
 
 static void prepareImportTable(PELoader* loader)
@@ -730,6 +738,22 @@ static void prepareImportTable(PELoader* loader)
 
     loader->ImportTable     = peImage + dd.VirtualAddress;
     loader->ImportTableSize = dd.Size;
+
+    // erase timestamp in PE image
+    if (loader->ImportTableSize == 0)
+    {
+        return;
+    }
+    Image_ImportDescriptor* import = (Image_ImportDescriptor*)(loader->ImportTable);
+    for (;;)
+    {
+        if (import->Name == 0)
+        {
+            break;
+        }
+        import->TimeDateStamp = 0;
+        import++;
+    }
 }
 
 static void prepareDelayImportTable(PELoader* loader)
@@ -741,6 +765,22 @@ static void prepareDelayImportTable(PELoader* loader)
 
     loader->DelayImportTable     = peImage + dd.VirtualAddress;
     loader->DelayImportTableSize = dd.Size;
+
+    // erase timestamp in PE image
+    if (loader->DelayImportTableSize == 0)
+    {
+        return;
+    }
+    Image_DelayloadDescriptor* dld = (Image_DelayloadDescriptor*)(loader->DelayImportTable);
+    for (;;)
+    {
+        if (dld->DllNameRVA == 0)
+        {
+            break;
+        }
+        dld->TimeDateStamp = 0;
+        dld++;
+    }
 }
 
 // backupPEImage is used to execute PE image multi times.
@@ -1418,7 +1458,8 @@ static void ldr_tls_callback(DWORD dwReason)
 
 static void ldr_exit_process(UINT uExitCode)
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call ldr_exit_process: 0x%zX", uExitCode);
 
@@ -1428,13 +1469,19 @@ static void ldr_exit_process(UINT uExitCode)
         pe_dll_main(DLL_PROCESS_DETACH, false);
     }
 
-    // TODO
-    // runtime->Thread.KillAll();
+    if (!runtime->Thread.KillAll())
+    {
+        dbg_log("[PE Loader]", "failed to kill all threads");
+    }
 
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
 
-    loader->Runtime->Core.Cleanup();
+    errno err = runtime->Core.Cleanup();
+    if (err != NO_ERROR)
+    {
+        dbg_log("[PE Loader]", "failed to cleanup: 0x%X", err);
+    }
 
     clean_run_data();
     set_exit_code(uExitCode);
@@ -1637,14 +1684,20 @@ void hook_ExitProcess(UINT uExitCode)
 
     dbg_log("[PE Loader]", "ExitProcess: %zu", uExitCode);
 
-    // TODO
-    // runtime->Thread.KillAll();
+    if (!runtime->Thread.KillAll())
+    {
+        dbg_log("[PE Loader]", "failed to kill all threads");
+    }
 
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
     ldr_free_tls_block();
 
-    runtime->Core.Cleanup();
+    errno err = runtime->Core.Cleanup();
+    if (err != NO_ERROR)
+    {
+        dbg_log("[PE Loader]", "failed to cleanup: 0x%X", err);
+    }
 
     clean_run_data();
     set_exit_code(uExitCode);
