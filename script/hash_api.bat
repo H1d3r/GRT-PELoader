@@ -46,7 +46,15 @@ hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _o_exit
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func __p___argc
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func __p___argv
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func __p___wargv
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _crt_atexit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _crt_at_quick_exit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _register_onexit_function
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func exit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _exit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _Exit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _cexit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func _c_exit
+hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func quick_exit
 
 hash_api -fmt 64 -conc -func RT_GetArgValue
 hash_api -fmt 64 -conc -func RT_GetArgPointer
@@ -95,7 +103,15 @@ hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _o_exit
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func __p___argc
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func __p___argv
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func __p___wargv
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _crt_atexit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _crt_at_quick_exit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _register_onexit_function
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func exit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _exit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _Exit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _cexit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func _c_exit
+hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func quick_exit
 
 hash_api -fmt 32 -conc -func RT_GetArgValue
 hash_api -fmt 32 -conc -func RT_GetArgPointer
