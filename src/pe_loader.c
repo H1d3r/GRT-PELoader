@@ -85,6 +85,10 @@ typedef struct {
     LPSTR*  argv_a;
     LPWSTR* argv_w;
 
+    // about msvcrt/ucrtbase on exit
+    void** on_exit;
+    int32  num_exit;
+
     // write return value
     uint* ExitCode;
 } PELoader;
@@ -141,6 +145,8 @@ static bool  ldr_process_delay_import();
 static void  ldr_alloc_tls_block();
 static void  ldr_free_tls_block();
 static void  ldr_tls_callback(DWORD dwReason);
+static void  ldr_register_exit(void* func);
+static void  ldr_do_exit();
 static void  ldr_exit_process(UINT uExitCode);
 static void  ldr_epilogue();
 
@@ -1498,6 +1504,49 @@ static void ldr_tls_callback(DWORD dwReason)
     }
 }
 
+__declspec(noinline)
+static void ldr_register_exit(void* func)
+{
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
+
+    if (!ldr_lock_status())
+    {
+        return;
+    }
+
+    // allocate memory for store function pointer
+    uint size = sizeof(void*) * (uint)(loader->num_exit + 1);
+    loader->on_exit = runtime->Memory.Realloc(loader->on_exit, size);
+    // set function pointer
+    loader->on_exit[loader->num_exit] = func;
+    loader->num_exit++;
+    dbg_log("[PE Loader]", "register exit callback: 0x%zX", func);
+
+    ldr_unlock_status();
+}
+
+__declspec(noinline)
+static void ldr_do_exit()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (!ldr_lock_status())
+    {
+        return;
+    }
+
+    int32 num = loader->num_exit;
+    for (int32 i = num - 1; i >= 0; i--)
+    {
+        void (__cdecl *func)() = (void (__cdecl *)())(loader->on_exit[i]);
+        func();
+        dbg_log("[PE Loader]", "call exit callback: 0x%zX", func);
+    }
+
+    ldr_unlock_status();
+}
+
 static void ldr_exit_process(UINT uExitCode)
 {
     PELoader*  loader  = getPELoaderPointer();
@@ -1832,7 +1881,7 @@ __declspec(noinline)
 int __cdecl hook_msvcrt_atexit(void* func)
 {
     dbg_log("[PE Loader]", "call msvcrt.atexit");
-
+    ldr_register_exit(func);
     return 0;
 }
 
@@ -1840,7 +1889,7 @@ __declspec(noinline)
 void* __cdecl hook_msvcrt_onexit(void* func)
 {
     dbg_log("[PE Loader]", "call msvcrt._onexit");
-
+    ldr_register_exit(func);
     return func;
 }
 
@@ -1848,7 +1897,7 @@ __declspec(noinline)
 void* __cdecl hook_msvcrt_dllonexit(void* func, void* pbegin, void* pend)
 {
     dbg_log("[PE Loader]", "call msvcrt._dllonexit");
-
+    ldr_register_exit(func);
     // ignore warning
     pbegin = NULL;
     pend   = NULL;
@@ -1858,6 +1907,7 @@ void* __cdecl hook_msvcrt_dllonexit(void* func, void* pbegin, void* pend)
 __declspec(noinline)
 void __cdecl hook_msvcrt_exit(int exitcode)
 {
+    ldr_do_exit();
     hook_ExitProcess((UINT)exitcode);
 }
 
@@ -2167,6 +2217,10 @@ static void clean_run_data()
     loader->argc   = 0;
     loader->argv_a = NULL;
     loader->argv_w = NULL;
+
+    // reset on exit callback
+    loader->on_exit  = NULL;
+    loader->num_exit = 0;
 }
 
 __declspec(noinline)
