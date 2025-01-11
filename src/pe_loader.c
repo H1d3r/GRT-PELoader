@@ -189,7 +189,10 @@ void  __cdecl hook_msvcrt_exit(int exitcode);
 int*      __cdecl hook_ucrtbase_p_argc();
 byte***   __cdecl hook_ucrtbase_p_argv();
 uint16*** __cdecl hook_ucrtbase_p_wargv();
-void      __cdecl hook_ucrtbase_exit(int exitcode);
+
+int  __cdecl hook_ucrtbase_atexit(void* func);
+int  __cdecl hook_ucrtbase_onexit(void* table, void* func);
+void __cdecl hook_ucrtbase_exit(int exitcode);
 
 void loadCommandLineToArgv(PELoader* loader);
 
@@ -1036,7 +1039,15 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x677E9E5FFC09596F, 0xF0CDF0DC4A6693B0, GetFuncAddr(&hook_ucrtbase_p_argc)     },
         { 0x348408E3C4C1F84A, 0x00D6384B5E49BE4E, GetFuncAddr(&hook_ucrtbase_p_argv)     },
         { 0xE4963C275A179C3A, 0x56818722C1E69D4F, GetFuncAddr(&hook_ucrtbase_p_wargv)    },
+        { 0xAA136812DF9EB160, 0x42548B3C4280B19A, GetFuncAddr(&hook_ucrtbase_atexit)     },// _crt_atexit
+        { 0x4E7A26901BB3EC62, 0x386F945605B7A0AC, GetFuncAddr(&hook_ucrtbase_atexit)     },// _crt_at_quick_exit
+        { 0x02C65C1FF64C3E77, 0x6D3D2282E138D2B7, GetFuncAddr(&hook_ucrtbase_onexit)     },// _register_onexit_function
         { 0xD806168873719B4E, 0x477C6E75E8D61A35, GetFuncAddr(&hook_ucrtbase_exit)       },
+        { 0xE2C10C718CBC4B4A, 0x006ACBD0EBFF8DCE, GetFuncAddr(&hook_ucrtbase_exit)       },// _exit
+        { 0x84A9F41391B0C0E4, 0x41C04E4C5EEED31D, GetFuncAddr(&hook_ucrtbase_exit)       },// _Exit
+        { 0xB3AD674905D869E3, 0x31970EFAD3DA5C17, GetFuncAddr(&hook_ucrtbase_exit)       },// _cexit
+        { 0x2ACDB535FEF2CD76, 0x127E8E9F16D87088, GetFuncAddr(&hook_ucrtbase_exit)       },// _c_exit
+        { 0x8B23415012EA8D5B, 0xBA6276780F17E45E, GetFuncAddr(&hook_ucrtbase_exit)       },// quick_exit
     };
 #elif _WIN32
     {
@@ -1064,7 +1075,15 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x9E4AA9D4, 0xA97CC100, GetFuncAddr(&hook_ucrtbase_p_argc)     },
         { 0x4029DD68, 0x4F1713D1, GetFuncAddr(&hook_ucrtbase_p_argv)     },
         { 0x21EF5083, 0xA44FD76E, GetFuncAddr(&hook_ucrtbase_p_wargv)    },
+        { 0x968EA376, 0xE0415797, GetFuncAddr(&hook_ucrtbase_atexit)     }, // _crt_atexit
+        { 0xB1BF5E08, 0x404C0CF9, GetFuncAddr(&hook_ucrtbase_atexit)     }, // _crt_at_quick_exit
+        { 0xD3745DD0, 0x67D5DACC, GetFuncAddr(&hook_ucrtbase_onexit)     }, // _register_onexit_function
         { 0x1207ACD2, 0x8560B050, GetFuncAddr(&hook_ucrtbase_exit)       },
+        { 0x092BEA87, 0xE370C726, GetFuncAddr(&hook_ucrtbase_exit)       },// _exit
+        { 0x81BCEF46, 0xD0EAB5F5, GetFuncAddr(&hook_ucrtbase_exit)       },// _Exit
+        { 0x73C7582D, 0x3AFEF1E0, GetFuncAddr(&hook_ucrtbase_exit)       },// _cexit
+        { 0xB40F5BCE, 0x3DA209E2, GetFuncAddr(&hook_ucrtbase_exit)       },// _c_exit
+        { 0xE6A5BAB4, 0xCA976959, GetFuncAddr(&hook_ucrtbase_exit)       },// quick_exit
     };
 #endif
     for (int i = 0; i < arrlen(methods); i++)
@@ -1907,10 +1926,12 @@ void* __cdecl hook_msvcrt_dllonexit(void* func, void* pbegin, void* pend)
 __declspec(noinline)
 void __cdecl hook_msvcrt_exit(int exitcode)
 {
+    dbg_log("[PE Loader]", "call msvcrt.exit");
     ldr_do_exit();
     hook_ExitProcess((UINT)exitcode);
 }
 
+__declspec(noinline)
 int* __cdecl hook_ucrtbase_p_argc()
 {
     PELoader* loader = getPELoaderPointer();
@@ -1939,6 +1960,7 @@ int* __cdecl hook_ucrtbase_p_argc()
     return p_argc();
 }
 
+__declspec(noinline)
 byte*** __cdecl hook_ucrtbase_p_argv()
 {
     PELoader* loader = getPELoaderPointer();
@@ -1967,6 +1989,7 @@ byte*** __cdecl hook_ucrtbase_p_argv()
     return p_argv();
 }
 
+__declspec(noinline)
 uint16*** __cdecl hook_ucrtbase_p_wargv()
 {
     PELoader* loader = getPELoaderPointer();
@@ -1995,8 +2018,29 @@ uint16*** __cdecl hook_ucrtbase_p_wargv()
     return p_wargv();
 }
 
+__declspec(noinline)
+int __cdecl hook_ucrtbase_atexit(void* func)
+{
+    dbg_log("[PE Loader]", "call ucrtbase._crt_atexit");
+    ldr_register_exit(func);
+    return 0;
+}
+
+__declspec(noinline)
+int __cdecl hook_ucrtbase_onexit(void* table, void* func)
+{
+    dbg_log("[PE Loader]", "call ucrtbase._register_onexit_function");
+    ldr_register_exit(func);
+    // ignore warning
+    table = NULL;
+    return 0;
+}
+
+__declspec(noinline)
 void __cdecl hook_ucrtbase_exit(int exitcode)
 {
+    dbg_log("[PE Loader]", "call ucrtbase.exit");
+    ldr_do_exit();
     hook_ExitProcess((UINT)exitcode);
 }
 
