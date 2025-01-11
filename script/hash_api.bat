@@ -31,7 +31,17 @@ hash_api -fmt 64 -conc -mod "shell32.dll" -func CommandLineToArgvW
 
 hash_api -fmt 64 -conc -mod "msvcrt.dll" -func __getmainargs
 hash_api -fmt 64 -conc -mod "msvcrt.dll" -func __wgetmainargs
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func atexit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _onexit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _dllonexit
 hash_api -fmt 64 -conc -mod "msvcrt.dll" -func exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _Exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _cexit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _c_exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func quick_exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _amsg_exit
+hash_api -fmt 64 -conc -mod "msvcrt.dll" -func _o_exit
 
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func __p___argc
 hash_api -fmt 64 -conc -mod "ucrtbase.dll" -func __p___argv
@@ -70,7 +80,17 @@ hash_api -fmt 32 -conc -mod "shell32.dll" -func CommandLineToArgvW
 
 hash_api -fmt 32 -conc -mod "msvcrt.dll" -func __getmainargs
 hash_api -fmt 32 -conc -mod "msvcrt.dll" -func __wgetmainargs
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func atexit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _onexit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _dllonexit
 hash_api -fmt 32 -conc -mod "msvcrt.dll" -func exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _Exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _cexit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _c_exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func quick_exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _amsg_exit
+hash_api -fmt 32 -conc -mod "msvcrt.dll" -func _o_exit
 
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func __p___argc
 hash_api -fmt 32 -conc -mod "ucrtbase.dll" -func __p___argv
