@@ -174,7 +174,10 @@ int __cdecl hook_msvcrt_getmainargs(
 int __cdecl hook_msvcrt_wgetmainargs(
     int* argc, uint16*** argv, uint16*** env, int doWildCard, void* startInfo
 );
-void __cdecl hook_msvcrt_exit(int exitcode);
+int   __cdecl hook_msvcrt_atexit(void* func);
+void* __cdecl hook_msvcrt_onexit(void* func);
+void* __cdecl hook_msvcrt_dllonexit(void* func, void* pbegin, void* pend);
+void  __cdecl hook_msvcrt_exit(int exitcode);
 
 // hooks about ucrtbase.dll
 int*      __cdecl hook_ucrtbase_p_argc();
@@ -1013,7 +1016,17 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x003837989C804A7A, 0x77BACCABEB6CE508, GetFuncAddr(&hook_ExitProcess)         },
         { 0x8D91B93B7BFC89B4, 0x428A7543FADEEF29, GetFuncAddr(&hook_msvcrt_getmainargs)  },
         { 0xB6627A6DDB0A9B1A, 0x729C834DB43EB70A, GetFuncAddr(&hook_msvcrt_wgetmainargs) },
+        { 0x09D5A9F4AFA840B0, 0xAA4A0E457ACEF3AF, GetFuncAddr(&hook_msvcrt_atexit)       },
+        { 0x3C03CF70E803FFC9, 0x7DF0A0B4D6DA6C61, GetFuncAddr(&hook_msvcrt_onexit)       },
+        { 0xF69B9609BFC3866B, 0x78F57B29208EC83F, GetFuncAddr(&hook_msvcrt_dllonexit)    },
         { 0x4B7D921A385FB3D2, 0xC579F5ED84E53139, GetFuncAddr(&hook_msvcrt_exit)         },
+        { 0xCF5B61D9D1D07170, 0x8E81AD35920956CF, GetFuncAddr(&hook_msvcrt_exit)         }, // _exit
+        { 0x9C21EEDD7A2A5DDE, 0x662C082531C1CF07, GetFuncAddr(&hook_msvcrt_exit)         }, // _Exit
+        { 0x30E025C660C45C1A, 0xFF6D4FB59EA71340, GetFuncAddr(&hook_msvcrt_exit)         }, // _cexit
+        { 0x8B0F23118385BCFE, 0x8DCDC63B3ED804BA, GetFuncAddr(&hook_msvcrt_exit)         }, // _c_exit
+        { 0x70596B50D6A5DC99, 0xA207B156D6577956, GetFuncAddr(&hook_msvcrt_exit)         }, // quick_exit
+        { 0x8D9113B7D97053BE, 0xC2BF1EFCD107A1AE, GetFuncAddr(&hook_msvcrt_exit)         }, // _amsg_exit
+        { 0xBEA31032BE54C256, 0xA70BB0D7ED5706AB, GetFuncAddr(&hook_msvcrt_exit)         }, // _o_exit
         { 0x677E9E5FFC09596F, 0xF0CDF0DC4A6693B0, GetFuncAddr(&hook_ucrtbase_p_argc)     },
         { 0x348408E3C4C1F84A, 0x00D6384B5E49BE4E, GetFuncAddr(&hook_ucrtbase_p_argv)     },
         { 0xE4963C275A179C3A, 0x56818722C1E69D4F, GetFuncAddr(&hook_ucrtbase_p_wargv)    },
@@ -1031,7 +1044,17 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0xB439D7F0, 0xF97FF53F, GetFuncAddr(&hook_ExitProcess)         },
         { 0xEC3DD822, 0x91377248, GetFuncAddr(&hook_msvcrt_getmainargs)  },
         { 0x44C32027, 0x354751F7, GetFuncAddr(&hook_msvcrt_wgetmainargs) },
+        { 0x11488404, 0xCC8231AF, GetFuncAddr(&hook_msvcrt_atexit)       },
+        { 0xDC46DA5B, 0x3F49D570, GetFuncAddr(&hook_msvcrt_onexit)       },
+        { 0xB5450AD6, 0xD0D3330A, GetFuncAddr(&hook_msvcrt_dllonexit)    },
         { 0xF1E55A4D, 0x9A112CBD, GetFuncAddr(&hook_msvcrt_exit)         },
+        { 0x80A779FC, 0xB919AF61, GetFuncAddr(&hook_msvcrt_exit)         }, // _exit
+        { 0x359F0EBD, 0xC3EADDB1, GetFuncAddr(&hook_msvcrt_exit)         }, // _Exit
+        { 0x11DDB94D, 0xB92975A9, GetFuncAddr(&hook_msvcrt_exit)         }, // _cexit
+        { 0x91C44932, 0x8C4B60F8, GetFuncAddr(&hook_msvcrt_exit)         }, // _c_exit
+        { 0xC4AD4F7C, 0x3122305E, GetFuncAddr(&hook_msvcrt_exit)         }, // quick_exit
+        { 0xF2AE4C38, 0x7484F7A7, GetFuncAddr(&hook_msvcrt_exit)         }, // _amsg_exit
+        { 0x302015B0, 0xE53271F9, GetFuncAddr(&hook_msvcrt_exit)         }, // _o_exit
         { 0x9E4AA9D4, 0xA97CC100, GetFuncAddr(&hook_ucrtbase_p_argc)     },
         { 0x4029DD68, 0x4F1713D1, GetFuncAddr(&hook_ucrtbase_p_argv)     },
         { 0x21EF5083, 0xA44FD76E, GetFuncAddr(&hook_ucrtbase_p_wargv)    },
@@ -1803,6 +1826,33 @@ int __cdecl hook_msvcrt_wgetmainargs(
         *argv = loader->argv_w;
     }
     return ret;
+}
+
+__declspec(noinline)
+int __cdecl hook_msvcrt_atexit(void* func)
+{
+    dbg_log("[PE Loader]", "call msvcrt.atexit");
+
+    return 0;
+}
+
+__declspec(noinline)
+void* __cdecl hook_msvcrt_onexit(void* func)
+{
+    dbg_log("[PE Loader]", "call msvcrt._onexit");
+
+    return func;
+}
+
+__declspec(noinline)
+void* __cdecl hook_msvcrt_dllonexit(void* func, void* pbegin, void* pend)
+{
+    dbg_log("[PE Loader]", "call msvcrt._dllonexit");
+
+    // ignore warning
+    pbegin = NULL;
+    pend   = NULL;
+    return func;
 }
 
 __declspec(noinline)
