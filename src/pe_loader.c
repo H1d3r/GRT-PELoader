@@ -132,6 +132,8 @@ static errno cleanPELoader(PELoader* loader);
 static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName);
 static errno ldr_init_mutex();
+static bool  ldr_lock_status();
+static bool  ldr_unlock_status();
 static bool  ldr_copy_image();
 static void* ldr_process_export(LPSTR name);
 static bool  ldr_process_import();
@@ -950,8 +952,8 @@ static bool ldr_lock()
 {
     PELoader* loader = getPELoaderPointer();
 
-    uint32 event = loader->WaitForSingleObject(loader->hMutex, INFINITE);
-    return event == WAIT_OBJECT_0;
+    DWORD event = loader->WaitForSingleObject(loader->hMutex, INFINITE);
+    return event == WAIT_OBJECT_0 || event == WAIT_ABANDONED;
 }
 
 __declspec(noinline)
@@ -1075,11 +1077,28 @@ static errno ldr_init_mutex()
     return NO_ERROR;
 }
 
+__declspec(noinline)
+static bool ldr_lock_status()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    DWORD event = loader->WaitForSingleObject(loader->StatusMu, INFINITE);
+    return event == WAIT_OBJECT_0 || event == WAIT_ABANDONED;
+}
+
+__declspec(noinline)
+static bool ldr_unlock_status()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    return loader->ReleaseMutex(loader->StatusMu);
+}
+
 static bool ldr_copy_image()
 {
     PELoader* loader = getPELoaderPointer();
 
-    if (loader->WaitForSingleObject(loader->StatusMu, INFINITE) != WAIT_OBJECT_0)
+    if (!ldr_lock_status())
     {
         return false;
     }
@@ -1087,7 +1106,7 @@ static bool ldr_copy_image()
     // recovery PE image from backup for process data like global variable
     mem_copy((void*)loader->PEImage, loader->PEBackup, loader->ImageSize);
 
-    return loader->ReleaseMutex(loader->StatusMu);
+    return ldr_unlock_status();
 }
 
 __declspec(noinline)
@@ -2027,28 +2046,28 @@ static void set_exit_code(uint code)
 {
     PELoader* loader = getPELoaderPointer();
 
-    if (loader->WaitForSingleObject(loader->StatusMu, INFINITE) != WAIT_OBJECT_0)
+    if (!ldr_lock_status())
     {
         return;
     }
 
     *loader->ExitCode = code;
 
-    loader->ReleaseMutex(loader->StatusMu);
+    ldr_unlock_status();
 }
 
 static uint get_exit_code()
 {
     PELoader* loader = getPELoaderPointer();
 
-    if (loader->WaitForSingleObject(loader->StatusMu, INFINITE) != WAIT_OBJECT_0)
+    if (!ldr_lock_status())
     {
         return 1;
     }
 
     uint code = *loader->ExitCode;
 
-    if (!loader->ReleaseMutex(loader->StatusMu))
+    if (!ldr_unlock_status())
     {
         return 1;
     }
@@ -2060,14 +2079,14 @@ static void set_running(bool run)
 {
     PELoader* loader = getPELoaderPointer();
 
-    if (loader->WaitForSingleObject(loader->StatusMu, INFINITE) != WAIT_OBJECT_0)
+    if (!ldr_lock_status())
     {
         return;
     }
 
     loader->IsRunning = run;
 
-    loader->ReleaseMutex(loader->StatusMu);
+    ldr_unlock_status();
 }
 
 __declspec(noinline)
@@ -2075,14 +2094,14 @@ static bool is_running()
 {
     PELoader* loader = getPELoaderPointer();
 
-    if (loader->WaitForSingleObject(loader->StatusMu, INFINITE) != WAIT_OBJECT_0)
+    if (!ldr_lock_status())
     {
         return false;
     }
 
     bool running = loader->IsRunning;
 
-    if (!loader->ReleaseMutex(loader->StatusMu))
+    if (!ldr_unlock_status())
     {
         return false;
     }
