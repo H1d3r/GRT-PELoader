@@ -24,6 +24,8 @@ hash_api -fmt 64 -conc -func GetCommandLineW
 hash_api -fmt 64 -conc -func LocalFree
 hash_api -fmt 64 -conc -func GetStdHandle
 hash_api -fmt 64 -conc -func ExitProcess
+hash_api -fmt 64 -conc -mod "ntdll.dll" -func RtlExitUserThread
+hash_api -fmt 64 -conc -mod "ntdll.dll" -func RtlExitUserProcess
 
 hash_api -fmt 64 -conc -mod "shell32.dll" -func CommandLineToArgvW
 
@@ -83,6 +85,8 @@ hash_api -fmt 32 -conc -func GetCommandLineW
 hash_api -fmt 32 -conc -func LocalFree
 hash_api -fmt 32 -conc -func GetStdHandle
 hash_api -fmt 32 -conc -func ExitProcess
+hash_api -fmt 32 -conc -mod "ntdll.dll" -func RtlExitUserThread
+hash_api -fmt 32 -conc -mod "ntdll.dll" -func RtlExitUserProcess
 
 hash_api -fmt 32 -conc -mod "shell32.dll" -func CommandLineToArgvW
 
