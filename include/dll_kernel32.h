@@ -128,16 +128,6 @@ typedef BOOL (*VirtualProtect_t)
     LPVOID lpAddress, SIZE_T dwSize, DWORD flNewProtect, DWORD* lpflOldProtect
 );
 
-typedef BOOL (*VirtualLock_t)
-(
-    LPVOID lpAddress, SIZE_T dwSize
-);
-
-typedef BOOL (*VirtualUnlock_t)
-(
-    LPVOID lpAddress, SIZE_T dwSize
-);
-
 typedef HANDLE (*CreateThread_t)
 (
     POINTER lpThreadAttributes, SIZE_T dwStackSize, POINTER lpStartAddress,
