@@ -29,6 +29,7 @@ https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/exit-exit-exit
 https://learn.microsoft.com/en-us/cpp/c-runtime-library/internal-crt-globals-and-functions?view=msvc-170
 https://learn.microsoft.com/en-us/cpp/c-runtime-library/execute-onexit-table-initialize-onexit-table-register-onexit-function?view=msvc-170
 https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/beginthread-beginthreadex?view=msvc-170
+https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/endthread-endthreadex?view=msvc-170
 https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
 https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
 https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
