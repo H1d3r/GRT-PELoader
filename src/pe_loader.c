@@ -169,6 +169,10 @@ HANDLE  hook_CreateThread(
     POINTER lpThreadAttributes, SIZE_T dwStackSize, POINTER lpStartAddress,
     LPVOID lpParameter, DWORD dwCreationFlags, DWORD* lpThreadId
 );
+HANDLE  stub_CreateThread(
+    POINTER lpThreadAttributes, SIZE_T dwStackSize, POINTER lpStartAddress,
+    LPVOID lpParameter, DWORD dwCreationFlags, DWORD* lpThreadId, DWORD cc
+);
 void stub_ExecuteThread(LPVOID lpParameter);
 void hook_ExitThread(DWORD dwExitCode);
 void hook_ExitProcess(UINT uExitCode);
@@ -1727,15 +1731,32 @@ HANDLE hook_GetStdHandle(DWORD nStdHandle)
     return loader->GetStdHandle(nStdHandle);
 }
 
+// about calling convention for msvcrt/ucrtbase._beginthread
+#define CC_STDCALL 0
+#define CC_CDECL   1
+#define CC_CLRCALL 2
+
 typedef struct {
     POINTER lpStartAddress;
     LPVOID  lpParameter;
+    DWORD   callConvention;
 } createThreadCtx;
 
 __declspec(noinline)
 HANDLE hook_CreateThread(
     POINTER lpThreadAttributes, SIZE_T dwStackSize, POINTER lpStartAddress,
     LPVOID lpParameter, DWORD dwCreationFlags, DWORD* lpThreadId
+){
+    return stub_CreateThread(
+        lpThreadAttributes, dwStackSize, lpStartAddress,
+        lpParameter, dwCreationFlags, lpThreadId, CC_STDCALL
+    );
+}
+
+__declspec(noinline)
+HANDLE stub_CreateThread(
+    POINTER lpThreadAttributes, SIZE_T dwStackSize, POINTER lpStartAddress,
+    LPVOID lpParameter, DWORD dwCreationFlags, DWORD* lpThreadId, DWORD cc
 ){
     PELoader*  loader  = getPELoaderPointer();
     Runtime_M* runtime = loader->Runtime;
@@ -1754,6 +1775,7 @@ HANDLE hook_CreateThread(
     createThreadCtx* ctx = (createThreadCtx*)parameter;
     ctx->lpStartAddress = lpStartAddress;
     ctx->lpParameter    = lpParameter;
+    ctx->callConvention = cc;
 
     // create thread at stub, that function will call actual StartAddress
     void* addr = GetFuncAddr(&stub_ExecuteThread);
@@ -1773,8 +1795,9 @@ void stub_ExecuteThread(LPVOID lpParameter)
 
     // copy arguments from context 
     createThreadCtx* ctx = (createThreadCtx*)lpParameter;
-    POINTER startAddress = ctx->lpStartAddress;
-    LPVOID  parameter    = ctx->lpParameter;
+    POINTER startAddress   = ctx->lpStartAddress;
+    LPVOID  parameter      = ctx->lpParameter;
+    DWORD   callConvention = ctx->callConvention;
     runtime->Memory.Free(lpParameter);
 
     // execute TLS callback list before call dll_main.
@@ -1787,9 +1810,33 @@ void stub_ExecuteThread(LPVOID lpParameter)
     }
 
     // execute the function
-    typedef void (*func_entry_t)(LPVOID lpParameter);
-    func_entry_t entry = (func_entry_t)startAddress;
-    entry(parameter);
+    switch (callConvention)
+    {
+    case CC_STDCALL:
+      {
+        typedef void(__stdcall *func_entry_t)(LPVOID lpParameter);
+        func_entry_t entry = (func_entry_t)startAddress;
+        entry(parameter);
+        break;
+      }
+    case CC_CDECL:
+      {
+        typedef void (__cdecl *func_entry_t)(LPVOID lpParameter);
+        func_entry_t entry = (func_entry_t)startAddress;
+        entry(parameter);
+        break;
+      }
+    case CC_CLRCALL:
+      {
+        // TODO think it  __clrcall
+        typedef void(__stdcall *func_entry_t)(LPVOID lpParameter);
+        func_entry_t entry = (func_entry_t)startAddress;
+        entry(parameter);
+        break;
+      }
+    default:
+        panic(PANIC_UNREACHABLE_CODE);
+    }
 
     hook_ExitThread(0);
 }
@@ -1962,7 +2009,11 @@ __declspec(noinline)
 uint __cdecl hook_msvcrt_beginthread(
     void* proc, uint32 stackSize, void* arg
 ){
-    return 0;
+    dbg_log("[PE Loader]", "call msvcrt._beginthread");
+    HANDLE hThread = stub_CreateThread(
+        0, stackSize, proc, arg, 0, NULL, CC_CDECL
+    );
+    return (uint)hThread;
 }
 
 __declspec(noinline)
@@ -1970,7 +2021,11 @@ uint __cdecl hook_msvcrt_beginthreadex(
     void* security, uint32 stackSize, void* proc, 
     void* arg, uint32 flag, uint32* tid
 ){
-    return 0;
+    dbg_log("[PE Loader]", "call msvcrt._beginthreadex");
+    HANDLE hThread = stub_CreateThread(
+        security, stackSize, proc, arg, flag, tid, CC_STDCALL
+    );
+    return (uint)hThread;
 }
 
 __declspec(noinline)
@@ -2058,6 +2113,55 @@ uint16*** __cdecl hook_ucrtbase_p_wargv()
         return NULL;
     }
     return p_wargv();
+}
+
+__declspec(noinline)
+int __cdecl hook_ucrtbase_atexit(void* func)
+{
+    dbg_log("[PE Loader]", "call ucrtbase._crt_atexit");
+    ldr_register_exit(func);
+    return 0;
+}
+
+__declspec(noinline)
+int __cdecl hook_ucrtbase_onexit(void* table, void* func)
+{
+    dbg_log("[PE Loader]", "call ucrtbase._register_onexit_function");
+    ldr_register_exit(func);
+    // ignore warning
+    table = NULL;
+    return 0;
+}
+
+__declspec(noinline)
+void __cdecl hook_ucrtbase_exit(int exitcode)
+{
+    dbg_log("[PE Loader]", "call ucrtbase.exit");
+    ldr_do_exit();
+    hook_ExitProcess((UINT)exitcode);
+}
+
+__declspec(noinline)
+uint __cdecl hook_ucrtbase_beginthread(
+    void* proc, uint32 stackSize, void* arg
+){
+    dbg_log("[PE Loader]", "call ucrtbase._beginthread");
+    HANDLE hThread = stub_CreateThread(
+        0, stackSize, proc, arg, 0, NULL, CC_CDECL
+    );
+    return (uint)hThread;
+}
+
+__declspec(noinline)
+uint __cdecl hook_ucrtbase_beginthreadex(
+    void* security, uint32 stackSize, void* proc, 
+    void* arg, uint32 flag, uint32* tid
+){
+    dbg_log("[PE Loader]", "call ucrtbase._beginthreadex");
+    HANDLE hThread = stub_CreateThread(
+        security, stackSize, proc, arg, flag, tid, CC_STDCALL
+    );
+    return (uint)hThread;
 }
 
 // if you only parse the command line parameters in the configuration
@@ -2157,47 +2261,6 @@ void loadCommandLineToArgv(PELoader* loader)
         loader->LocalFree(argv);
     }
     loader->FreeLibrary(hShell32);
-}
-
-__declspec(noinline)
-int __cdecl hook_ucrtbase_atexit(void* func)
-{
-    dbg_log("[PE Loader]", "call ucrtbase._crt_atexit");
-    ldr_register_exit(func);
-    return 0;
-}
-
-__declspec(noinline)
-int __cdecl hook_ucrtbase_onexit(void* table, void* func)
-{
-    dbg_log("[PE Loader]", "call ucrtbase._register_onexit_function");
-    ldr_register_exit(func);
-    // ignore warning
-    table = NULL;
-    return 0;
-}
-
-__declspec(noinline)
-void __cdecl hook_ucrtbase_exit(int exitcode)
-{
-    dbg_log("[PE Loader]", "call ucrtbase.exit");
-    ldr_do_exit();
-    hook_ExitProcess((UINT)exitcode);
-}
-
-__declspec(noinline)
-uint __cdecl hook_ucrtbase_beginthread(
-    void* proc, uint32 stackSize, void* arg
-){
-    return 0;
-}
-
-__declspec(noinline)
-uint __cdecl hook_ucrtbase_beginthreadex(
-    void* security, uint32 stackSize, void* proc, 
-    void* arg, uint32 flag, uint32* tid
-){
-    return 0;
 }
 
 __declspec(noinline)
