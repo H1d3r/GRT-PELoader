@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -40,11 +41,8 @@ func TestHTTP(t *testing.T) {
 }
 
 func TestHTTPInstance(t *testing.T) {
-	opts := &Options{
-		ImageName:    "test.exe",
-		CommandLine:  "-p1 123 -p2 \"hello\"",
-		WaitMain:     true,
-		AllowSkipDLL: true,
+	if runtime.GOOS != "windows" {
+		return
 	}
 
 	// start a http server
@@ -61,41 +59,61 @@ func TestHTTPInstance(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	wg := sync.WaitGroup{}
 	t.Run("x86", func(t *testing.T) {
-		if runtime.GOOS != "windows" || runtime.GOARCH != "386" {
+		if runtime.GOARCH != "386" {
 			return
 		}
 
 		for _, item := range images {
 			URL := fmt.Sprintf("http://%s/x86/%s", httpAddr, item.path)
 			image := NewHTTP(URL, nil)
-			opts.WaitMain = item.wait
+			opts := &Options{
+				ImageName:    "test.exe",
+				CommandLine:  "-p1 123 -p2 \"hello\"",
+				WaitMain:     item.wait,
+				AllowSkipDLL: true,
+			}
 
-			inst, err := CreateInstance(testTplX86, 32, image, opts)
-			require.NoError(t, err)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				inst, err := CreateInstance(testTplX86, 32, image, opts)
+				require.NoError(t, err)
 
-			addr := loadShellcode(t, inst)
-			ret, _, _ := syscallN(addr)
-			require.NotEqual(t, uintptr(0), ret)
+				addr := loadShellcode(t, inst)
+				ret, _, _ := syscallN(addr)
+				require.NotEqual(t, uintptr(0), ret)
+			}()
 		}
 	})
 
 	t.Run("x64", func(t *testing.T) {
-		if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		if runtime.GOARCH != "amd64" {
 			return
 		}
 
 		for _, item := range images {
 			URL := fmt.Sprintf("http://%s/x64/%s", httpAddr, item.path)
 			image := NewHTTP(URL, nil)
-			opts.WaitMain = item.wait
+			opts := &Options{
+				ImageName:    "test.exe",
+				CommandLine:  "-p1 123 -p2 \"hello\"",
+				WaitMain:     item.wait,
+				AllowSkipDLL: true,
+			}
 
-			inst, err := CreateInstance(testTplX64, 64, image, opts)
-			require.NoError(t, err)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				inst, err := CreateInstance(testTplX64, 64, image, opts)
+				require.NoError(t, err)
 
-			addr := loadShellcode(t, inst)
-			ret, _, _ := syscallN(addr)
-			require.NotEqual(t, uintptr(0), ret)
+				addr := loadShellcode(t, inst)
+				ret, _, _ := syscallN(addr)
+				require.NotEqual(t, uintptr(0), ret)
+			}()
 		}
 	})
+	wg.Wait()
 }
