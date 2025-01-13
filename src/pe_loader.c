@@ -196,6 +196,8 @@ uint __cdecl hook_msvcrt_beginthreadex(
     void* security, uint32 stackSize, void* proc, 
     void* arg, uint32 flag, uint32* tid
 );
+void __cdecl hook_msvcrt_endthread();
+void __cdecl hook_msvcrt_endthreadex(uint32 code);
 
 // hooks about ucrtbase.dll
 int*      __cdecl hook_ucrtbase_p_argc();
@@ -213,6 +215,8 @@ uint __cdecl hook_ucrtbase_beginthreadex(
     void* security, uint32 stackSize, void* proc, 
     void* arg, uint32 flag, uint32* tid
 );
+void __cdecl hook_ucrtbase_endthread();
+void __cdecl hook_ucrtbase_endthreadex(uint32 code);
 
 void loadCommandLineToArgv(PELoader* loader);
 
@@ -1060,6 +1064,8 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0xBEA31032BE54C256, 0xA70BB0D7ED5706AB, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
         { 0x7C58F853C94D7734, 0x01728DEDCEA9827D, GetFuncAddr(&hook_msvcrt_beginthread)     },
         { 0x5A9C7453C029573A, 0x14970FDAB85504CA, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
+        { 0x0BD5D73C8548860C, 0x7718D9A31945FC05, GetFuncAddr(&hook_msvcrt_endthread)       },
+        { 0xE25BF7B3E1C51A2A, 0xE96A26D024C2EAD7, GetFuncAddr(&hook_msvcrt_endthreadex)     },
         { 0x677E9E5FFC09596F, 0xF0CDF0DC4A6693B0, GetFuncAddr(&hook_ucrtbase_p_argc)        },
         { 0x348408E3C4C1F84A, 0x00D6384B5E49BE4E, GetFuncAddr(&hook_ucrtbase_p_argv)        },
         { 0xE4963C275A179C3A, 0x56818722C1E69D4F, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
@@ -1074,6 +1080,8 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x8B23415012EA8D5B, 0xBA6276780F17E45E, GetFuncAddr(&hook_ucrtbase_exit)          },// quick_exit
         { 0x3CC1F09F6B644BFA, 0xA620C2F1A2247C65, GetFuncAddr(&hook_ucrtbase_beginthread)   },
         { 0xB37DC4391224F516, 0x5660750ECAE84417, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
+        { 0x7617799FD759FB6A, 0x02FED24E7D32EFD4, GetFuncAddr(&hook_ucrtbase_endthread)     },
+        { 0xF3FD3C6261671701, 0x4CFA9DEFBF4A8F72, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
     };
 #elif _WIN32
     {
@@ -1102,6 +1110,8 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x302015B0, 0xE53271F9, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
         { 0x15D5ECD4, 0x361E1CB1, GetFuncAddr(&hook_msvcrt_beginthread)     },
         { 0x363F1035, 0xACFEC527, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
+        { 0x5CDDA35D, 0x4333D46D, GetFuncAddr(&hook_msvcrt_endthread)       },
+        { 0x206C521E, 0x9E022665, GetFuncAddr(&hook_msvcrt_endthreadex)     },
         { 0x9E4AA9D4, 0xA97CC100, GetFuncAddr(&hook_ucrtbase_p_argc)        },
         { 0x4029DD68, 0x4F1713D1, GetFuncAddr(&hook_ucrtbase_p_argv)        },
         { 0x21EF5083, 0xA44FD76E, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
@@ -1116,6 +1126,8 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0xE6A5BAB4, 0xCA976959, GetFuncAddr(&hook_ucrtbase_exit)          },// quick_exit
         { 0x033589BB, 0x2BE6FFB1, GetFuncAddr(&hook_ucrtbase_beginthread)   },
         { 0xD787345F, 0xC0B107F6, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
+        { 0xD98CB670, 0xBF7AD081, GetFuncAddr(&hook_ucrtbase_endthread)     },
+        { 0xAB1F1EFB, 0x95F5740B, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
     };
 #endif
     for (int i = 0; i < arrlen(methods); i++)
@@ -2029,6 +2041,20 @@ uint __cdecl hook_msvcrt_beginthreadex(
 }
 
 __declspec(noinline)
+void __cdecl hook_msvcrt_endthread()
+{
+    dbg_log("[PE Loader]", "call msvcrt._endthread");
+    hook_ExitThread(0);
+}
+
+__declspec(noinline)
+void __cdecl hook_msvcrt_endthreadex(uint32 code)
+{
+    dbg_log("[PE Loader]", "call msvcrt._endthreadex");
+    hook_ExitThread(code);
+}
+
+__declspec(noinline)
 int* __cdecl hook_ucrtbase_p_argc()
 {
     PELoader* loader = getPELoaderPointer();
@@ -2162,6 +2188,20 @@ uint __cdecl hook_ucrtbase_beginthreadex(
         security, stackSize, proc, arg, flag, tid, CC_STDCALL
     );
     return (uint)hThread;
+}
+
+__declspec(noinline)
+void __cdecl hook_ucrtbase_endthread()
+{
+    dbg_log("[PE Loader]", "call ucrtbase._endthread");
+    hook_ExitThread(0);
+}
+
+__declspec(noinline)
+void __cdecl hook_ucrtbase_endthreadex(uint32 code)
+{
+    dbg_log("[PE Loader]", "call ucrtbase._endthreadex");
+    hook_ExitThread(code);
 }
 
 // if you only parse the command line parameters in the configuration
