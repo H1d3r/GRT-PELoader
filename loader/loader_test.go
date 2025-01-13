@@ -30,7 +30,7 @@ var images = []struct {
 }{
 	{"go.exe", false},
 	{"rust_msvc.exe", true},
-	// {"rust_gnu.exe", true},
+	{"rust_gnu.exe", true},
 	{"ucrtbase_main.exe", true},
 	{"ucrtbase_wmain.exe", true},
 }

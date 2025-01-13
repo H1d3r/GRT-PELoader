@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/For-ACGN/LZSS"
@@ -82,15 +83,13 @@ func TestEmbedPreCompress(t *testing.T) {
 }
 
 func TestEmbedInstance(t *testing.T) {
-	opts := &Options{
-		ImageName:    "test.exe",
-		CommandLine:  "-p1 123 -p2 \"hello\"",
-		WaitMain:     true,
-		AllowSkipDLL: true,
+	if runtime.GOOS != "windows" {
+		return
 	}
 
+	wg := sync.WaitGroup{}
 	t.Run("x86", func(t *testing.T) {
-		if runtime.GOOS != "windows" || runtime.GOARCH != "386" {
+		if runtime.GOARCH != "386" {
 			return
 		}
 
@@ -98,7 +97,12 @@ func TestEmbedInstance(t *testing.T) {
 			path := filepath.Join("../test/image/x86", item.path)
 			image, err := os.ReadFile(path)
 			require.NoError(t, err)
-			opts.WaitMain = item.wait
+			opts := &Options{
+				ImageName:    "test.exe",
+				CommandLine:  "-p1 123 -p2 \"hello\"",
+				WaitMain:     item.wait,
+				AllowSkipDLL: true,
+			}
 
 			preCompressed, err := lzss.Compress(image, 2048)
 			require.NoError(t, err)
@@ -109,18 +113,22 @@ func TestEmbedInstance(t *testing.T) {
 			for _, img := range []Image{
 				embed1, embed2, embed3,
 			} {
-				inst, err := CreateInstance(testTplX86, 32, img, opts)
-				require.NoError(t, err)
+				wg.Add(1)
+				go func(img Image) {
+					defer wg.Done()
+					inst, err := CreateInstance(testTplX86, 32, img, opts)
+					require.NoError(t, err)
 
-				addr := loadShellcode(t, inst)
-				ret, _, _ := syscallN(addr)
-				require.NotEqual(t, uintptr(0), ret)
+					addr := loadShellcode(t, inst)
+					ret, _, _ := syscallN(addr)
+					require.NotEqual(t, uintptr(0), ret)
+				}(img)
 			}
 		}
 	})
 
 	t.Run("x64", func(t *testing.T) {
-		if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		if runtime.GOARCH != "amd64" {
 			return
 		}
 
@@ -128,7 +136,12 @@ func TestEmbedInstance(t *testing.T) {
 			path := filepath.Join("../test/image/x64", item.path)
 			image, err := os.ReadFile(path)
 			require.NoError(t, err)
-			opts.WaitMain = item.wait
+			opts := &Options{
+				ImageName:    "test.exe",
+				CommandLine:  "-p1 123 -p2 \"hello\"",
+				WaitMain:     item.wait,
+				AllowSkipDLL: true,
+			}
 
 			preCompressed, err := lzss.Compress(image, 2048)
 			require.NoError(t, err)
@@ -139,13 +152,18 @@ func TestEmbedInstance(t *testing.T) {
 			for _, img := range []Image{
 				embed1, embed2, embed3,
 			} {
-				inst, err := CreateInstance(testTplX64, 64, img, opts)
-				require.NoError(t, err)
+				wg.Add(1)
+				go func(img Image) {
+					defer wg.Done()
+					inst, err := CreateInstance(testTplX64, 64, img, opts)
+					require.NoError(t, err)
 
-				addr := loadShellcode(t, inst)
-				ret, _, _ := syscallN(addr)
-				require.NotEqual(t, uintptr(0), ret)
+					addr := loadShellcode(t, inst)
+					ret, _, _ := syscallN(addr)
+					require.NotEqual(t, uintptr(0), ret)
+				}(img)
 			}
 		}
 	})
+	wg.Wait()
 }
