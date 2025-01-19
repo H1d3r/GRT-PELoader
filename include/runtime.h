@@ -85,10 +85,17 @@ typedef bool (*ResGetStatus_t)(RT_Status* status);
 typedef bool (*ResFreeAllMu_t)();
 
 // about argument store
-typedef bool (*GetArgValue_t)(uint index, void* value, uint32* size);
-typedef bool (*GetArgPointer_t)(uint index, void** pointer, uint32* size);
-typedef bool (*EraseArgument_t)(uint index);
-typedef void (*EraseAllArgs_t)();
+typedef bool (*ArgGetValue_t)(uint32 id, void* value, uint32* size);
+typedef bool (*ArgGetPointer_t)(uint32 id, void** pointer, uint32* size);
+typedef bool (*ArgErase_t)(uint32 id);
+typedef void (*ArgEraseAll_t)();
+
+// about in-memory storage
+typedef bool (*ImsSetValue_t)(int id, void* value, uint size);
+typedef bool (*ImsGetValue_t)(int id, void* value, uint* size);
+typedef bool (*ImsGetPointer_t)(int id, void** pointer, uint* size);
+typedef bool (*ImsDelete_t)(int id);
+typedef bool (*ImsDeleteAll_t)();
 
 // about WinBase
 // The buffer allocated from methods must call Runtime_M.Memory.Free().
@@ -136,6 +143,8 @@ typedef errno (*HTTPGet_t)(UTF16 url, HTTP_Opts* opts, HTTP_Resp* resp);
 typedef errno (*HTTPPost_t)(UTF16 url, HTTP_Body* body, HTTP_Opts* opts, HTTP_Resp* resp);
 typedef errno (*HTTPDo_t)(UTF16 url, UTF16 method, HTTP_Opts* opts, HTTP_Resp* resp);
 typedef errno (*HTTPFree_t)();
+
+// about WinCrypto
 
 // about random module
 typedef void   (*RandBuffer_t)(byte* buf, int64 size);
@@ -250,11 +259,19 @@ typedef struct {
     } Resource;
 
     struct {
-        GetArgValue_t   GetValue;
-        GetArgPointer_t GetPointer;
-        EraseArgument_t Erase;
-        EraseAllArgs_t  EraseAll;
+        ArgGetValue_t   GetValue;
+        ArgGetPointer_t GetPointer;
+        ArgErase_t      Erase;
+        ArgEraseAll_t   EraseAll;
     } Argument;
+
+    struct {
+        ImsSetValue_t   SetValue;
+        ImsGetValue_t   GetValue;
+        ImsGetPointer_t GetPointer;
+        ImsDelete_t     Delete;
+        ImsDeleteAll_t  DeleteAll;
+    } Storage;
 
     struct {
         ANSIToUTF16_t  ANSIToUTF16;
