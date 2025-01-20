@@ -8,14 +8,14 @@
 #define MODE_LOCAL_FILE  2
 #define MODE_HTTP_SERVER 3
 
-#define ARG_IDX_PE_IMAGE       0
-#define ARG_IDX_CMDLINE_A      1
-#define ARG_IDX_CMDLINE_W      2
-#define ARG_IDX_WAIT_MAIN      3
-#define ARG_IDX_ALLOW_SKIP_DLL 4
-#define ARG_IDX_STD_INPUT  	   5
-#define ARG_IDX_STD_OUTPUT 	   6
-#define ARG_IDX_STD_ERROR      7
+#define ARG_ID_PE_IMAGE       1
+#define ARG_ID_CMDLINE_A      2
+#define ARG_ID_CMDLINE_W      3
+#define ARG_ID_WAIT_MAIN      4
+#define ARG_ID_ALLOW_SKIP_DLL 5
+#define ARG_ID_STD_INPUT  	  6
+#define ARG_ID_STD_OUTPUT 	  7
+#define ARG_ID_STD_ERROR      8
 
 #define EMBED_DISABLE_COMPRESS 0
 #define EMBED_ENABLE_COMPRESS  1
