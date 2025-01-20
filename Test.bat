@@ -1,4 +1,3 @@
-set GOOS=windows
 set GOARCH=386
 go test -v -count=1 ./loader/...
 set GOARCH=amd64
