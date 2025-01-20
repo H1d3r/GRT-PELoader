@@ -716,11 +716,11 @@ static bool initTLSDirectory(PELoader* loader)
         return true;
     }
     Image_TLSDirectory* tls = (Image_TLSDirectory*)(tlsTable);
-    // allocate memory for copy template data
-    // the first 16 bytes for store original TLS address and align
+    // allocate memory for copy tls template data, the first 16 bytes
+    // for store original TLS address and make sure 16 bytes-aligned
     uint size  = tls->EndAddressOfRawData - tls->StartAddressOfRawData;
     uint total = 16 + size + tls->SizeOfZeroFill;
-    // allocate memory for write PE image
+    // allocate memory for save tls template data
     uint  pSize = total + (uint)((1 + RandUintN((uint64)tls, 8)) * 4096);
     void* block = loader->VirtualAlloc(NULL, pSize, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (block == NULL)
@@ -743,7 +743,8 @@ static bool initTLSDirectory(PELoader* loader)
     dbg_log("[PE Loader]", "TLS block template: 0x%zX", block);
     // record tls callback list
     loader->TLSList = (TLSCallback_t*)(tls->AddressOfCallBacks);
-    // destroy table for prevent extract raw PE image
+    // destroy tls template data and tls table for prevent extract raw PE image
+    RandBuffer((byte*)(tls->StartAddressOfRawData), size);
     RandBuffer((byte*)tlsTable, tableSize);
     return true;
 }
@@ -828,7 +829,7 @@ static bool backupPEImage(PELoader* loader)
     uint64 seed = (uint64)(GetFuncAddr(&InitPELoader)) + 4096;
     uint32 size = loader->ImageSize;
     size += (uint32)((1 + RandUintN(seed, 128)) * 4096);
-    // allocate memory for write PE image
+    // allocate memory for backup PE image
     void* mem = loader->VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (mem == NULL)
     {
