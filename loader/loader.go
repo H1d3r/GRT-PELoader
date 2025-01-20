@@ -106,10 +106,15 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
 	}
-	args := [][]byte{
-		config, cmdLineA, cmdLineW,
-		waitMain, allowSkipDLL,
-		stdInput, stdOutput, stdError,
+	args := []*argument.Arg{
+		{ID: 1, Data: config},
+		{ID: 2, Data: cmdLineA},
+		{ID: 3, Data: cmdLineW},
+		{ID: 4, Data: waitMain},
+		{ID: 5, Data: allowSkipDLL},
+		{ID: 6, Data: stdInput},
+		{ID: 7, Data: stdOutput},
+		{ID: 8, Data: stdError},
 	}
 	stub, err := argument.Encode(args...)
 	if err != nil {
