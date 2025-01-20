@@ -15,14 +15,15 @@ func main() {
 	cmdlineA := "test_x86.exe -arg 1234\x00"
 	cmdlineW := stringToUTF16(cmdlineA)
 
-	args := [][]byte{
-		{0xFF, 0xFF, 0x00, 0x00}, // invalid PE image
-		[]byte(cmdlineA),         // command line ANSI
-		[]byte(cmdlineW),         // command line Unicode
-		{0x01},                   // wait main thread
-		make([]byte, 4),          // standard input handle
-		make([]byte, 4),          // standard output handle
-		make([]byte, 4),          // standard error handle
+	args := []*argument.Arg{
+		{ID: 1, Data: []byte{0xFF}},     // invalid PE image
+		{ID: 2, Data: []byte(cmdlineA)}, // command line ANSI
+		{ID: 3, Data: []byte(cmdlineW)}, // command line Unicode
+		{ID: 4, Data: []byte{0x01}},     // wait main thread
+		{ID: 5, Data: []byte{0x01}},     // allow skip dll
+		{ID: 6, Data: make([]byte, 4)},  // standard input handle
+		{ID: 7, Data: make([]byte, 4)},  // standard output handle
+		{ID: 8, Data: make([]byte, 4)},  // standard error handle
 	}
 	stub, err := argument.Encode(args...)
 	checkError(err)
@@ -33,14 +34,15 @@ func main() {
 
 	fmt.Println()
 
-	args = [][]byte{
-		{0xFF, 0xFF, 0x00, 0x00}, // invalid PE image
-		[]byte(cmdlineA),         // command line ANSI
-		[]byte(cmdlineW),         // command line Unicode
-		{0x01},                   // wait main thread
-		make([]byte, 8),          // standard input handle
-		make([]byte, 8),          // standard output handle
-		make([]byte, 8),          // standard error handle
+	args = []*argument.Arg{
+		{ID: 1, Data: []byte{0xFF}},     // invalid PE image
+		{ID: 2, Data: []byte(cmdlineA)}, // command line ANSI
+		{ID: 3, Data: []byte(cmdlineW)}, // command line Unicode
+		{ID: 4, Data: []byte{0x01}},     // wait main thread
+		{ID: 5, Data: []byte{0x01}},     // allow skip dll
+		{ID: 6, Data: make([]byte, 8)},  // standard input handle
+		{ID: 7, Data: make([]byte, 8)},  // standard output handle
+		{ID: 8, Data: make([]byte, 8)},  // standard error handle
 	}
 	stub, err = argument.Encode(args...)
 	checkError(err)
