@@ -49,9 +49,9 @@ func main() {
 	}
 
 	fmt.Println("load PE Loader templates")
-	ldrX64, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x64.bin"))
+	ldrX64, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x64.bin")) // #nosec
 	checkError(err)
-	ldrX86, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x86.bin"))
+	ldrX86, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x86.bin")) // #nosec
 	checkError(err)
 
 	// create image config
@@ -60,7 +60,7 @@ func main() {
 	case "embed":
 		fmt.Println("use embed image mode")
 		fmt.Println("parse PE image file")
-		peData, err := os.ReadFile(pePath)
+		peData, err := os.ReadFile(pePath) // #nosec
 		checkError(err)
 		peFile, err := pe.NewFile(bytes.NewReader(peData))
 		checkError(err)
