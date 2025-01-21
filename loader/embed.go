@@ -81,7 +81,7 @@ func (e *Embed) Encode() ([]byte, error) {
 	config.WriteByte(modeEmbed)
 	// need use compress mode
 	if !e.compress {
-		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image)))
+		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image))) // #nosec
 		config.WriteByte(disableCompress)
 		config.Write(size)
 		config.Write(e.image)
@@ -105,9 +105,11 @@ func (e *Embed) Encode() ([]byte, error) {
 		rawSize = e.rawSize
 	}
 	// write raw size
-	config.Write(binary.LittleEndian.AppendUint32(nil, uint32(rawSize)))
+	size := binary.LittleEndian.AppendUint32(nil, uint32(rawSize)) // #nosec
+	config.Write(size)
 	// write compressed size
-	config.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(compressed))))
+	size = binary.LittleEndian.AppendUint32(nil, uint32(len(compressed))) // #nosec
+	config.Write(size)
 	// write compressed PE image
 	config.Write(compressed)
 	return config.Bytes(), nil
