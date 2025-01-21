@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -71,9 +73,9 @@ func testRuntimeAPI() {
 	procName, err := syscall.BytePtrFromString("GetProcAddress")
 	checkError(err)
 
-	ret, _, err := syscall.SyscallN(
+	ret, _, _ := syscall.SyscallN(
 		GetProcAddressOriginal,
-		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)),
+		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
 	if ret == 0 {
 		log.Fatalln("failed to get GetProcAddress address")
@@ -87,7 +89,7 @@ func testRuntimeAPI() {
 	checkError(err)
 	ret, _, _ = syscall.SyscallN(
 		GetProcAddressOriginal,
-		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)),
+		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
 	if ret == 0 {
 		log.Fatalln("failed to get GetProcAddress address")
@@ -127,7 +129,7 @@ func testMemoryData() {
 			funcAddr := reflect.ValueOf(testRuntimeAPI).Pointer()
 			fmt.Printf("instruction:             0x%X\n", funcAddr)
 
-			inst := unsafe.Slice((*byte)(unsafe.Pointer(funcAddr)), 8)
+			inst := unsafe.Slice((*byte)(unsafe.Pointer(funcAddr)), 8) // #nosec
 			fmt.Printf("instruction data:        %v\n", inst)
 
 			time.Sleep(time.Second)
@@ -169,8 +171,8 @@ func testGoRoutine() {
 func testLargeBuffer() {
 	alloc := func(period time.Duration, min, max int) {
 		for {
-			buf := make([]byte, min+rand.Intn(max))
-			init := byte(rand.Int())
+			buf := make([]byte, min+rand.Intn(max)) // #nosec
+			init := byte(rand.Int())                // #nosec
 			for i := 0; i < len(buf); i++ {
 				buf[i] = init
 				init++
@@ -217,7 +219,7 @@ func testHTTPServer() {
 
 	server := http.Server{
 		Handler: mux,
-	}
+	} // #nosec
 	go func() {
 		err := server.Serve(listener)
 		checkError(err)
@@ -240,7 +242,7 @@ func testHTTPClient() {
 				fmt.Println("http client keep alive")
 				client.CloseIdleConnections()
 			}()
-			time.Sleep(1 + time.Duration(rand.Intn(250))*time.Millisecond)
+			time.Sleep(1 + time.Duration(rand.Intn(250))*time.Millisecond) // #nosec
 		}
 	}()
 }
@@ -250,12 +252,12 @@ func kernel32Sleep() {
 		var counter int
 		for {
 			// wait go routine run other test
-			time.Sleep(1 + time.Duration(rand.Intn(1000))*time.Millisecond)
+			time.Sleep(1 + time.Duration(rand.Intn(1000))*time.Millisecond) // #nosec
 
 			// trigger Gleam-RT SleepHR
 			fmt.Println("call kernel32.Sleep [hooked]")
 			now := time.Now()
-			errno, _, _ := procSleep.Call(1 + uintptr(rand.Intn(1000)))
+			errno, _, _ := procSleep.Call(1 + uintptr(rand.Intn(1000))) // #nosec
 			if errno != 0 {
 				log.Fatalf("occurred error when sleep: %X\n", errno)
 			}
