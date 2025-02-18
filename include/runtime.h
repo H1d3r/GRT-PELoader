@@ -74,8 +74,10 @@ typedef bool   (*ThdKillAllMu_t)();
 typedef struct {
     int64 NumMutexs;
     int64 NumEvents;
+    int64 NumSemaphores;
+    int64 NumWaitableTimers;
     int64 NumFiles;
-    int64 NumDirs;
+    int64 NumDirectories;
 } RT_Status;
 #endif // MOD_RESOURCE_H
 
@@ -111,7 +113,7 @@ typedef errno (*ReadFileW_t)(LPWSTR path, byte** buf, uint* size);
 typedef errno (*WriteFileA_t)(LPSTR path, byte* buf, uint size);
 typedef errno (*WriteFileW_t)(LPWSTR path, byte* buf, uint size);
 
-// about WinHTTP
+// =================================WinHTTP=================================
 #ifndef WIN_HTTP_H
 // The HTTP_Body.Buf allocated from WinHTTP must call Runtime_M.Memory.Free().
 typedef struct {
@@ -144,7 +146,46 @@ typedef errno (*HTTPPost_t)(UTF16 url, HTTP_Body* body, HTTP_Opts* opts, HTTP_Re
 typedef errno (*HTTPDo_t)(UTF16 url, UTF16 method, HTTP_Opts* opts, HTTP_Resp* resp);
 typedef errno (*HTTPFree_t)();
 
-// about WinCrypto
+// ================================WinCrypto================================
+
+// The allocated databuf must call Runtime_M.Memory.Free().
+// 
+// +---------+-------------+
+// |   IV    | cipher data |
+// +---------+-------------+
+// | 16 byte |     var     |
+// +---------+-------------+
+//
+// The AES is use CBC mode with PKCS#5 padding method.
+// The valid AES key length are 16, 24, 32 bytes.
+// The RSA is use PKCS#1 v1.5 padding method.
+//
+// The AES Key only contain the key data, not contain header.
+// The RSA Private/Public Key contain the header RSAPUBKEYHEADER.
+
+#ifndef WIN_CRYPTO_H
+
+#define CRYPTO_SHA1_HASH_SIZE 20
+#define CRYPTO_AES_BLOCK_SIZE 16
+#define CRYPTO_AES_IV_SIZE    16
+
+#define CRYPTO_RSA_KEY_USAGE_SIGN 1
+#define CRYPTO_RSA_KEY_USAGE_KEYX 2
+
+#endif // WIN_CRYPTO_H
+
+typedef errno (*CryptoRandBuffer_t)(byte* data, uint len);
+typedef errno (*CryptoSHA1_t)(byte* data, uint len, byte* hash);
+typedef errno (*CryptoAESEncrypt_t)(databuf* data, databuf* key, databuf* output);
+typedef errno (*CryptoAESDecrypt_t)(databuf* data, databuf* key, databuf* output);
+typedef errno (*CryptoRSAGenKey_t)(uint usage, uint bits, databuf* key);
+typedef errno (*CryptoRSAPubKey_t)(databuf* key, databuf* output);
+typedef errno (*CryptoRSASign_t)(databuf* data, databuf* key, databuf* signature);
+typedef errno (*CryptoRSAVerify_t)(databuf* data, databuf* key, databuf* signature);
+typedef errno (*CryptoRSAEncrypt_t)(databuf* data, databuf* key, databuf* output);
+typedef errno (*CryptoRSADecrypt_t)(databuf* data, databuf* key, databuf* output);
+
+// =================================Runtime=================================
 
 // about random module
 typedef void   (*RandBuffer_t)(byte* buf, int64 size);
@@ -293,6 +334,19 @@ typedef struct {
         HTTPDo_t   Do;
         HTTPFree_t Free;
     } WinHTTP;
+
+    struct {
+        CryptoRandBuffer_t RandBuffer;
+        CryptoSHA1_t       SHA1;
+        CryptoAESEncrypt_t AESEncrypt;
+        CryptoAESDecrypt_t AESDecrypt;
+        CryptoRSAGenKey_t  RSAGenKey;
+        CryptoRSAPubKey_t  RSAPubKey;
+        CryptoRSASign_t    RSASign;
+        CryptoRSAVerify_t  RSAVerify;
+        CryptoRSAEncrypt_t RSAEncrypt;
+        CryptoRSADecrypt_t RSADecrypt;
+    } WinCrypto;
 
     struct {
         RandBuffer_t  Buffer;
