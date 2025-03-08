@@ -61,8 +61,8 @@ bool TestInitPELoader()
     // file = "C:\\Windows\\System32\\combase.dll";
     // file = "C:\\Windows\\System32\\ws2_32.dll";
 
-    byte* buf; uint size;
-    errno err = runtime->WinFile.ReadFileA(file, &buf, &size);
+    databuf image;
+    errno err = runtime->WinFile.ReadFileA(file, &image);
     if (err != NO_ERROR)
     {
         printf_s("failed to open test pe file: 0x%X\n", err);
@@ -81,7 +81,7 @@ bool TestInitPELoader()
         .FindAPI = runtime->HashAPI.FindAPI,
     #endif // NO_RUNTIME
 
-        .Image        = buf,
+        .Image        = image.buf,
         .CommandLineA = cmdLineA,
         .CommandLineW = cmdLineW,
         .WaitMain     = true,
@@ -106,7 +106,7 @@ bool TestInitPELoader()
         return false;
     }
     // erase PE image after initialize
-    RandBuffer(buf, size);
+    RandBuffer(image.buf, image.len);
     return true;
 }
 
