@@ -258,39 +258,46 @@ static void* loadImageFromEmbed(Runtime_M* runtime, byte* config)
 
 static void* loadImageFromFile(Runtime_M* runtime, byte* config)
 {
-    byte* buf  = NULL;
-    uint  size = 0;
-    errno errno = runtime->WinFile.ReadFileW((LPWSTR)config, &buf, &size);
+    databuf file;
+    errno errno = runtime->WinFile.ReadFileW((LPWSTR)config, &file);
     if (errno != NO_ERROR)
     {
         SetLastErrno(errno);
         return NULL;
     }
-    if (size < 64)
+    if (file.len < 64)
     {
         SetLastErrno(ERR_INVALID_PE_IMAGE);
         return NULL;
     }
-    return buf;
+    return file.buf;
 }
 
 static void* loadImageFromHTTP(Runtime_M* runtime, byte* config)
 {
-    HTTP_Resp resp;
-    mem_init(&resp, sizeof(resp));
-    errno errno = runtime->WinHTTP.Get((UTF16)config, NULL, &resp);
+    HTTP_Request req;
+    runtime->WinHTTP.Init(&req);
+    req.URL = (UTF16)config;
+
+    HTTP_Response resp;
+    errno errno = runtime->WinHTTP.Get(&req, &resp);
     if (errno != NO_ERROR)
     {
         SetLastErrno(errno);
         return NULL;
     }
-    if (resp.Body.Size < 64)
+    if (resp.StatusCode != 200)
+    {
+        SetLastErrno(ERR_INVALID_HTTP_STATUS_CODE);
+        return NULL;   
+    }
+    if (resp.Body.len < 64)
     {
         SetLastErrno(ERR_INVALID_PE_IMAGE);
         return NULL;
     }
     runtime->WinHTTP.Free();
-    return resp.Body.Buf;
+    return resp.Body.buf;
 }
 
 static errno eraseArguments(Runtime_M* runtime)
