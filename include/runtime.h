@@ -78,6 +78,8 @@ typedef struct {
     int64 NumWaitableTimers;
     int64 NumFiles;
     int64 NumDirectories;
+    int64 NumIOCPs;
+    int64 NumSockets;
 } RT_Status;
 #endif // MOD_RESOURCE_H
 
@@ -108,42 +110,50 @@ typedef ANSI  (*UTF16ToANSIN_t)(UTF16 s, int n);
 
 // about WinFile
 // The buffer allocated from ReadFile must call Runtime_M.Memory.Free().
-typedef errno (*ReadFileA_t)(LPSTR path, byte** buf, uint* size);
-typedef errno (*ReadFileW_t)(LPWSTR path, byte** buf, uint* size);
-typedef errno (*WriteFileA_t)(LPSTR path, byte* buf, uint size);
-typedef errno (*WriteFileW_t)(LPWSTR path, byte* buf, uint size);
+typedef errno (*ReadFileA_t)(LPSTR path, databuf* file);
+typedef errno (*ReadFileW_t)(LPWSTR path, databuf* file);
+typedef errno (*WriteFileA_t)(LPSTR path, databuf* file);
+typedef errno (*WriteFileW_t)(LPWSTR path, databuf* file);
 
 // =================================WinHTTP=================================
 #ifndef WIN_HTTP_H
-// The HTTP_Body.Buf allocated from WinHTTP must call Runtime_M.Memory.Free().
-typedef struct {
-    void* Buf;
-    uint  Size;
-} HTTP_Body;
+// The databuf allocated from HTTP_Response must call Runtime_M.Memory.Free().
+// The Headers in HTTP_Response must call Runtime_M.Memory.Free() after use.
+// NOT add "/" at the last of ProxyURL.
+//
+// Init is used to initialize a HTTP request structure.
+// Free is used to try to free winhttp.dll after use.
 
 typedef struct {
-    UTF16  Headers;     // split by "\r\n"
-    UTF16  ContentType; // for POST method
-    UTF16  UserAgent;   // default User-Agent
-    UTF16  ProxyURL;    // http://user:pass@host.com/
-    uint   MaxBodySize; // default is no limit
-    uint32 Timeout;     // millseconds
-    uint8  AccessType;  // reference document about WinHttpOpen
+    UTF16 URL; // https://user:pass@www.example.com/test.txt
 
-    HTTP_Body* Body;
-} HTTP_Opts;
+    UTF16 Headers;        // split by "\r\n"
+    UTF16 UserAgent;      // default User-Agent
+    UTF16 ProxyURL;       // http://www.example.com:8080
+    UTF16 ProxyUser;      // proxy server username
+    UTF16 ProxyPass;      // proxy server password
+    uint  ConnectTimeout; // millseconds
+    uint  SendTimeout;    // millseconds
+    uint  ReceiveTimeout; // millseconds
+    uint  MaxBodySize;    // zero is no limit
+    uint8 AccessType;     // reference document about WinHttpOpen
+
+    databuf* Body;
+} HTTP_Request;
 
 typedef struct {
-    int32 StatusCode;
-    UTF16 Headers;
+    int32 StatusCode; // example 200, 404
+    UTF16 Headers;    // split by "\r\n"
 
-    HTTP_Body Body;
-} HTTP_Resp;
+    databuf Body;
+} HTTP_Response;
+
 #endif // WIN_HTTP_H
 
-typedef errno (*HTTPGet_t)(UTF16 url, HTTP_Opts* opts, HTTP_Resp* resp);
-typedef errno (*HTTPPost_t)(UTF16 url, HTTP_Body* body, HTTP_Opts* opts, HTTP_Resp* resp);
-typedef errno (*HTTPDo_t)(UTF16 url, UTF16 method, HTTP_Opts* opts, HTTP_Resp* resp);
+typedef errno (*HTTPGet_t)(HTTP_Request* req, HTTP_Response* resp);
+typedef errno (*HTTPPost_t)(HTTP_Request* req, HTTP_Response* resp);
+typedef errno (*HTTPDo_t)(UTF16 method, HTTP_Request* req, HTTP_Response* resp);
+typedef void  (*HTTPInit_t)(HTTP_Request* req);
 typedef errno (*HTTPFree_t)();
 
 // ================================WinCrypto================================
@@ -174,8 +184,8 @@ typedef errno (*HTTPFree_t)();
 
 #endif // WIN_CRYPTO_H
 
-typedef errno (*CryptoRandBuffer_t)(byte* data, uint len);
-typedef errno (*CryptoSHA1_t)(byte* data, uint len, byte* hash);
+typedef errno (*CryptoRandBuffer_t)(databuf* data);
+typedef errno (*CryptoSHA1_t)(databuf* data, byte* hash);
 typedef errno (*CryptoAESEncrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoAESDecrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoRSAGenKey_t)(uint usage, uint bits, databuf* key);
@@ -332,6 +342,8 @@ typedef struct {
         HTTPGet_t  Get;
         HTTPPost_t Post;
         HTTPDo_t   Do;
+
+        HTTPInit_t Init;
         HTTPFree_t Free;
     } WinHTTP;
 
