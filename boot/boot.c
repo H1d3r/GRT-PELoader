@@ -276,9 +276,11 @@ static void* loadImageFromFile(Runtime_M* runtime, byte* config)
 static void* loadImageFromHTTP(Runtime_M* runtime, byte* config)
 {
     HTTP_Request req;
-    runtime->WinHTTP.Init(&req);
-    req.URL = (UTF16)config;
-
+    if (!runtime->Serialization.Unserialize(config, &req))
+    {
+        SetLastErrno(ERR_INVALID_HTTP_CONFIG);
+        return NULL;
+    }
     HTTP_Response resp;
     errno errno = runtime->WinHTTP.Get(&req, &resp);
     if (errno != NO_ERROR)
