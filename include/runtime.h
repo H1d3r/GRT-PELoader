@@ -18,6 +18,10 @@
 
 // for generic shellcode development.
 
+#ifndef DLL_ADVAPI32_H
+typedef DWORD ALG_ID;
+#endif // DLL_ADVAPI32_H
+
 // about library tracker
 #ifndef MOD_LIBRARY_H
 typedef struct {
@@ -133,9 +137,9 @@ typedef struct {
     UTF16  ProxyURL;       // http://www.example.com:8080
     UTF16  ProxyUser;      // proxy server username
     UTF16  ProxyPass;      // proxy server password
-    uint32 ConnectTimeout; // millseconds, default is 60s
-    uint32 SendTimeout;    // millseconds, default is 600s
-    uint32 ReceiveTimeout; // millseconds, default is 600s
+    uint32 ConnectTimeout; // milliseconds, default is 60s
+    uint32 SendTimeout;    // milliseconds, default is 600s
+    uint32 ReceiveTimeout; // milliseconds, default is 600s
     uint32 MaxBodySize;    // zero is no limit
     uint8  AccessType;     // reference document about WinHttpOpen
 
@@ -169,15 +173,15 @@ typedef errno (*HTTPFree_t)();
 // +---------+-------------+
 //
 // The AES is use CBC mode with PKCS#5 padding method.
-// The valid AES key length are 16, 24, 32 bytes.
 // The RSA is use PKCS#1 v1.5 padding method.
 //
-// The AES Key only contain the key data, not contain header.
+// The HMAC/AES Key only contain the key data, not contain header.
 // The RSA Private/Public Key contain the header RSAPUBKEYHEADER.
+// 
+// The valid AES key length are 16, 24, 32 bytes.
 
 #ifndef WIN_CRYPTO_H
 
-#define CRYPTO_SHA1_HASH_SIZE 20
 #define CRYPTO_AES_BLOCK_SIZE 16
 #define CRYPTO_AES_IV_SIZE    16
 
@@ -187,13 +191,14 @@ typedef errno (*HTTPFree_t)();
 #endif // WIN_CRYPTO_H
 
 typedef errno (*CryptoRandBuffer_t)(databuf* data);
-typedef errno (*CryptoSHA1_t)(databuf* data, byte* hash);
+typedef errno (*CryptoHash_t)(ALG_ID aid, databuf* data, databuf* hash);
+typedef errno (*CryptoHMAC_t)(ALG_ID aid, databuf* data, databuf* key, databuf* hash);
 typedef errno (*CryptoAESEncrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoAESDecrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoRSAGenKey_t)(uint usage, uint bits, databuf* key);
 typedef errno (*CryptoRSAPubKey_t)(databuf* key, databuf* output);
-typedef errno (*CryptoRSASign_t)(databuf* data, databuf* key, databuf* signature);
-typedef errno (*CryptoRSAVerify_t)(databuf* data, databuf* key, databuf* signature);
+typedef errno (*CryptoRSASign_t)(ALG_ID aid, databuf* data, databuf* key, databuf* sign);
+typedef errno (*CryptoRSAVerify_t)(ALG_ID aid, databuf* data, databuf* key, databuf* sign);
 typedef errno (*CryptoRSAEncrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoRSADecrypt_t)(databuf* data, databuf* key, databuf* output);
 
@@ -213,15 +218,16 @@ typedef void (*Decrypt_t)(void* buf, uint size, byte* key, byte* iv);
 
 // about compress module
 // 
-// In general, the size of the destination buffer is 1.125
-// times the size of the source buffer to handle the worst
-// case (no compressible data).
+// Compress is used to compress data with LZSS.
+// If return value is -1, window size is invalid.
+// If dst is NULL, calculate the compressed length.
+// 
+// Decompress is used to decompress data with LZSS.
+// If dst is NULL, calculate the raw data length.
 // 
 // Since the algorithm is relatively simple to implement, 
-// it is NOT recommended to compress data exceeding 1MB.
-// 
-// Please record the original size when compressing to 
-// facilitate decompression¡£
+// it is NOT recommended to compress data exceeding 8MB.
+
 typedef uint (*Compress_t)(void* dst, void* src, uint len, uint window);
 typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 
@@ -388,7 +394,8 @@ typedef struct {
 
     struct {
         CryptoRandBuffer_t RandBuffer;
-        CryptoSHA1_t       SHA1;
+        CryptoHash_t       Hash;
+        CryptoHMAC_t       HMAC;
         CryptoAESEncrypt_t AESEncrypt;
         CryptoAESDecrypt_t AESDecrypt;
         CryptoRSAGenKey_t  RSAGenKey;
