@@ -25,6 +25,22 @@ func TestHTTP(t *testing.T) {
 		spew.Dump(config)
 	})
 
+	t.Run("with options", func(t *testing.T) {
+		headers := make(http.Header)
+		headers.Set("Header1", "h1")
+		headers.Set("Header2", "h2")
+		opts := &HTTPOptions{
+			Headers:   headers,
+			UserAgent: "ua",
+		}
+		image := NewHTTP(testURL, opts)
+
+		config, err := image.Encode()
+		require.NoError(t, err)
+
+		spew.Dump(config)
+	})
+
 	t.Run("invalid URL", func(t *testing.T) {
 		image := NewHTTP("invalid url", nil)
 
@@ -48,8 +64,24 @@ func TestHTTPInstance(t *testing.T) {
 	// start a http server
 	path, err := filepath.Abs("../test/image")
 	require.NoError(t, err)
+	serverMux := http.NewServeMux()
+	serverMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Header1") != "h1" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.Header.Get("Header2") != "h2" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.UserAgent() != "ua" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		http.FileServer(http.Dir(path)).ServeHTTP(w, r)
+	})
 	server := http.Server{
-		Handler: http.FileServer(http.Dir(path)),
+		Handler: serverMux,
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -59,6 +91,15 @@ func TestHTTPInstance(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	headers := make(http.Header)
+	headers.Set("Header1", "h1")
+	headers.Set("Header2", "h2")
+	opts := &HTTPOptions{
+		Headers:   headers,
+		UserAgent: "ua",
+	}
+	opts.Headers.Set("Header1", "h1")
+
 	wg := sync.WaitGroup{}
 	t.Run("x86", func(t *testing.T) {
 		if runtime.GOARCH != "386" {
@@ -67,7 +108,7 @@ func TestHTTPInstance(t *testing.T) {
 
 		for _, item := range images {
 			URL := fmt.Sprintf("http://%s/x86/%s", httpAddr, item.path)
-			image := NewHTTP(URL, nil)
+			image := NewHTTP(URL, opts)
 			opts := &Options{
 				ImageName:    "test.exe",
 				CommandLine:  "-p1 123 -p2 \"hello\"",
@@ -95,7 +136,7 @@ func TestHTTPInstance(t *testing.T) {
 
 		for _, item := range images {
 			URL := fmt.Sprintf("http://%s/x64/%s", httpAddr, item.path)
-			image := NewHTTP(URL, nil)
+			image := NewHTTP(URL, opts)
 			opts := &Options{
 				ImageName:    "test.exe",
 				CommandLine:  "-p1 123 -p2 \"hello\"",

@@ -24,7 +24,7 @@ type HTTP struct {
 	Opts *HTTPOptions
 }
 
-// HTTPOptions contain HTTP mode options.
+// HTTPOptions contains HTTP mode options.
 type HTTPOptions struct {
 	Headers   http.Header
 	UserAgent string
