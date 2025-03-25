@@ -28,7 +28,7 @@ func (f *File) Encode() ([]byte, error) {
 	// write the mode
 	config.WriteByte(modeFile)
 	// write the file path
-	config.WriteString(stringToUTF16(f.Path + "\x00"))
+	config.WriteString(stringToUTF16(f.Path))
 	return config.Bytes(), nil
 }
 

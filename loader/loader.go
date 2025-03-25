@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/RSSU-Shellcode/GRT-Config/argument"
-	"github.com/RSSU-Shellcode/GRT-Config/option"
+	"github.com/RSSU-Shellcode/GRT-Develop/argument"
+	"github.com/RSSU-Shellcode/GRT-Develop/option"
 )
 
 // the load mode about image source.
@@ -75,8 +75,8 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 			imageName = "\"" + imageName + "\""
 		}
 		imageName += " "
-		cmdLine = imageName + cmdLine + "\x00"
-		cmdLineA = []byte(cmdLine)
+		cmdLine = imageName + cmdLine
+		cmdLineA = []byte(cmdLine + "\x00")
 		cmdLineW = []byte(stringToUTF16(cmdLine))
 	}
 	// process WaitMain
@@ -125,7 +125,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 
 func stringToUTF16(s string) string {
 	w := utf16.Encode([]rune(s))
-	output := make([]byte, len(w)*2)
+	output := make([]byte, len(w)*2+2)
 	for i := 0; i < len(w); i++ {
 		binary.LittleEndian.PutUint16(output[i*2:], w[i])
 	}
