@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RSSU-Shellcode/GRT-Config/option"
+	"github.com/RSSU-Shellcode/GRT-Develop/option"
 	"github.com/RSSU-Shellcode/GRT-PELoader/loader"
 )
 

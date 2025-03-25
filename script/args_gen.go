@@ -8,7 +8,7 @@ import (
 	"os"
 	"unicode/utf16"
 
-	"github.com/RSSU-Shellcode/GRT-Config/argument"
+	"github.com/RSSU-Shellcode/GRT-Develop/argument"
 )
 
 func main() {
