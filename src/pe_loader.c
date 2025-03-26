@@ -482,7 +482,7 @@ static bool recoverPELoaderPointer(PELoader* loader)
 static errno initPELoaderEnvironment(PELoader* loader)
 {
     // create global mutex
-    HANDLE hMutex = loader->CreateMutexA(NULL, false, NULL);
+    HANDLE hMutex = loader->CreateMutexA(NULL, false, NAME_LDR_MUTEX_GLOBAL);
     if (hMutex == NULL)
     {
         return ERR_LOADER_CREATE_G_MUTEX;
@@ -1152,7 +1152,7 @@ static errno ldr_init_mutex()
         loader->CloseHandle(loader->StatusMu);
     }
     // create new status mutex
-    HANDLE statusMu = loader->CreateMutexA(NULL, false, NULL);
+    HANDLE statusMu = loader->CreateMutexA(NULL, false, NAME_LDR_MUTEX_STATUS);
     if (statusMu == NULL)
     {
         return ERR_LOADER_CREATE_S_MUTEX;
