@@ -129,7 +129,6 @@ static void  prepareImportTable(PELoader* loader);
 static void  prepareDelayImportTable(PELoader* loader);
 static bool  backupPEImage(PELoader* loader);
 static bool  flushInstructionCache(PELoader* loader);
-
 static void  erasePELoaderMethods(PELoader* loader);
 static errno cleanPELoader(PELoader* loader);
 
@@ -218,7 +217,7 @@ uint __cdecl hook_ucrtbase_beginthreadex(
 void __cdecl hook_ucrtbase_endthread();
 void __cdecl hook_ucrtbase_endthreadex(uint32 code);
 
-void loadCommandLineToArgv(PELoader* loader);
+void loadCommandLineToArgv();
 
 PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
 {
@@ -1934,7 +1933,7 @@ int __cdecl hook_msvcrt_getmainargs(
     }
 
     // hijack the return value about argc and argv
-    loadCommandLineToArgv(loader);
+    loadCommandLineToArgv();
     if (loader->argc != 0)
     {
         *argc = loader->argc;
@@ -1974,7 +1973,7 @@ int __cdecl hook_msvcrt_wgetmainargs(
     }
 
     // hijack the return value about argc and argv
-    loadCommandLineToArgv(loader);
+    loadCommandLineToArgv();
     if (loader->argc != 0)
     {
         *argc = loader->argc;
@@ -2062,7 +2061,7 @@ int* __cdecl hook_ucrtbase_p_argc()
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___argc");
 
-    loadCommandLineToArgv(loader);
+    loadCommandLineToArgv();
     if (loader->argc != 0)
     {
         return &loader->argc;
@@ -2091,7 +2090,7 @@ byte*** __cdecl hook_ucrtbase_p_argv()
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___argv");
 
-    loadCommandLineToArgv(loader);
+    loadCommandLineToArgv();
     if (loader->argc != 0)
     {
         return &loader->argv_a;
@@ -2120,7 +2119,7 @@ uint16*** __cdecl hook_ucrtbase_p_wargv()
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___wargv");
 
-    loadCommandLineToArgv(loader);
+    loadCommandLineToArgv();
     if (loader->argc != 0)
     {
         return &loader->argv_w;
@@ -2210,8 +2209,9 @@ void __cdecl hook_ucrtbase_endthreadex(uint32 code)
 // be larger, but if there are no command line parameters in the 
 // configuration, you can use the internal implementation in msvcrt 
 // or ucrtbase instead of loading shell32.dll.
-void loadCommandLineToArgv(PELoader* loader)
+void loadCommandLineToArgv()
 {
+    PELoader*  loader  = getPELoaderPointer();
     Runtime_M* runtime = loader->Runtime;
 
     if (loader->argc != 0)
