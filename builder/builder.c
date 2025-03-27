@@ -13,7 +13,6 @@
 // relative/absolute memory addresses.
 
 static LoadLibraryA_t LoadLibraryA;
-static FreeLibrary_t  FreeLibrary;
 static CreateFileA_t  CreateFileA;
 static WriteFile_t    WriteFile;
 static CloseHandle_t  CloseHandle;
@@ -27,7 +26,6 @@ bool testShellcode();
 static void init()
 {
     LoadLibraryA = FindAPI_A("kernel32.dll", "LoadLibraryA");
-    FreeLibrary  = FindAPI_A("kernel32.dll", "FreeLibrary");
     CreateFileA  = FindAPI_A("kernel32.dll", "CreateFileA");
     WriteFile    = FindAPI_A("kernel32.dll", "WriteFile");
     CloseHandle  = FindAPI_A("kernel32.dll", "CloseHandle");
