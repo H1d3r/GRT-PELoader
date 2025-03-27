@@ -12,6 +12,11 @@ rd /S /Q "builder\Release"
 rd /S /Q "builder\x64"
 rd /S /Q "builder\x86"
 
+rd /S /Q "cutter\Debug"
+rd /S /Q "cutter\Release"
+rd /S /Q "cutter\x64"
+rd /S /Q "cutter\x86"
+
 rd /S /Q "test\Debug"
 rd /S /Q "test\Release"
 rd /S /Q "test\x64"
