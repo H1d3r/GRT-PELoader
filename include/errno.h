@@ -8,10 +8,10 @@ typedef uint32 errno;
 void  SetLastErrno(errno errno);
 errno GetLastErrno();
 
-// 00······ module id
-// ··00···· error flags
-// ····00·· major error id
-// ······00 minor error id
+// 00路路路路路路 module id
+// 路路00路路路路 error flags
+// 路路路路00路路 major error id
+// 路路路路路路00 minor error id
 
 #define NO_ERROR 0x00000000
 
@@ -42,6 +42,11 @@ errno GetLastErrno();
 #define ERR_LOADER_PROCESS_DELAY_IMPORT (0x10000205)
 #define ERR_LOADER_CALL_DLL_MAIN        (0x10000206)
 #define ERR_LOADER_CREATE_MAIN_THREAD   (0x10000207)
+#define ERR_LOADER_NOT_RUNNING          (0x10000301)
+#define ERR_LOADER_EMPTY_PROC_NAME      (0x10000302)
+#define ERR_LOADER_EMPTY_EXPORT_TABLE   (0x10000303)
+#define ERR_LOADER_PROC_NOT_EXIST       (0x10000304)
+#define ERR_LOADER_FORWARDED_MODULE     (0x10000305)
 #define ERR_LOADER_CLEAN_G_MUTEX        (0x1000FF01)
 #define ERR_LOADER_CLEAN_S_MUTEX        (0x1000FF02)
 #define ERR_LOADER_FREE_PE_IMAGE        (0x1000FF03)
