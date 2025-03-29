@@ -46,6 +46,11 @@
     #define IMAGE_SNAP_BY_ORDINAL(ordinal) ((ordinal & IMAGE_ORDINAL_FLAG32) != 0)
 #endif
 
+#define DLL_PROCESS_ATTACH 1
+#define DLL_PROCESS_DETACH 0
+#define DLL_THREAD_ATTACH  2
+#define DLL_THREAD_DETACH  3
+
 typedef struct {
     WORD  Machine;
     WORD  NumberOfSections;
@@ -236,5 +241,15 @@ typedef struct {
     DWORD  SizeOfZeroFill;
     DWORD  Characteristics;
 } Image_TLSDirectory;
+
+typedef BOOL (*DllMain_t)
+(
+    HMODULE hModule, DWORD dwReason, LPVOID lpReserved
+);
+
+typedef void (*TLSCallback_t)
+(
+    HMODULE hModule, DWORD dwReason, LPVOID lpReserved
+);
 
 #endif // PE_IMAGE_H
