@@ -11,11 +11,6 @@ typedef HANDLE HLOCAL;
 
 #define MAX_PATH 260
 
-#define DLL_PROCESS_ATTACH 1
-#define DLL_PROCESS_DETACH 0
-#define DLL_THREAD_ATTACH  2
-#define DLL_THREAD_DETACH  3
-
 #define INVALID_HANDLE_VALUE ((HANDLE)(-1))
 
 #define CURRENT_PROCESS ((HANDLE)(-1))
@@ -72,16 +67,6 @@ typedef HANDLE HLOCAL;
 #define FILE_FLAG_DELETE_ON_CLOSE 0x04000000
 #define FILE_FLAG_NO_BUFFERING    0x20000000
 #define FILE_FLAG_WRITE_THROUGH   0x80000000
-
-typedef BOOL (*DllMain_t)
-(
-    HMODULE hModule, DWORD dwReason, LPVOID lpReserved
-);
-
-typedef void (*TLSCallback_t)
-(
-    HMODULE hModule, DWORD dwReason, LPVOID lpReserved
-);
 
 typedef HMODULE (*LoadLibraryA_t)
 (
