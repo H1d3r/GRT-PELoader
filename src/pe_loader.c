@@ -314,9 +314,9 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->IsDLL      = loader->IsDLL;
     module->ExitCode   = 0;
     // loader module methods
-    module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Execute = GetFuncAddr(&LDR_Execute);
     module->Exit    = GetFuncAddr(&LDR_Exit);
+    module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Destroy = GetFuncAddr(&LDR_Destroy);
     // record return value pointer;
     loader->ExitCode = &module->ExitCode;
@@ -1208,6 +1208,7 @@ static void* ldr_process_export(LPSTR name)
 
     if (name == NULL)
     {
+        SetLastErrno(ERR_LOADER_EMPTY_PROC_NAME);
         return NULL;
     }
     uintptr peImage     = loader->PEImage;
@@ -1216,6 +1217,7 @@ static void* ldr_process_export(LPSTR name)
     // check need process export
     if (tableSize == 0)
     {
+        SetLastErrno(ERR_LOADER_EMPTY_EXPORT_TABLE);
         return NULL;
     }
     Image_ExportDirectory* export = (Image_ExportDirectory*)(exportTable);
@@ -1223,30 +1225,32 @@ static void* ldr_process_export(LPSTR name)
     DWORD* aon = (DWORD*)(peImage + export->AddressOfNames);
     WORD*  aoo = (WORD* )(peImage + export->AddressOfNameOrdinals);
     DWORD base = export->Base;
-    DWORD ordi = (DWORD)(uintptr)(name);
     // try to find procedure address
     void* address = NULL;
-    if (ordi <= 0xFFFF)
+    if (name <= (LPSTR)(0xFFFF))
     {
         // get procedure address by ordinal
-        if (ordi <= export->NumberOfFunctions)
+        DWORD ordi = (DWORD)(uintptr)(name);
+        if (ordi - base <= export->NumberOfFunctions)
         {
             address = (void*)(peImage + (uintptr)(aof[ordi-base]));
         }
     } else {
         // get procedure address by name
-        for (uint32 i = 1; i <= export->NumberOfNames; i++)
+        for (uint32 i = base; i < export->NumberOfNames + base; i++)
         {
             LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i-base]));
-            if (strcmp_a(fn, name) == 0)
+            if (strcmp_a(fn, name) != 0)
             {
-                address = (void*)(peImage + (uintptr)(aof[aoo[i-base]]));
-                break;
+                continue;
             }
+            address = (void*)(peImage + (uintptr)(aof[aoo[i - base]]));
+            break;
         }
     }
     if (address == NULL)
     {
+        SetLastErrno(ERR_LOADER_PROC_NOT_EXIST);
         return NULL;
     }
     // check it is a forwarded export function
@@ -1300,6 +1304,7 @@ static void* ldr_process_export(LPSTR name)
     }
     if (hModule == NULL)
     {
+        SetLastErrno(ERR_LOADER_FORWARDED_MODULE);
         return NULL;
     }
     LPCSTR procName = (LPCSTR)((uintptr)exportName + dot + 1);
@@ -2433,6 +2438,7 @@ void* LDR_GetProc(LPSTR name)
 {
     if (!ldr_lock())
     {
+        SetLastErrno(ERR_LOADER_LOCK);
         return NULL;
     }
 
@@ -2441,6 +2447,7 @@ void* LDR_GetProc(LPSTR name)
     {
         if (!is_running())
         {
+            SetLastErrno(ERR_LOADER_NOT_RUNNING);
             break;
         }
         address = ldr_process_export(name);
@@ -2449,6 +2456,7 @@ void* LDR_GetProc(LPSTR name)
 
     if (!ldr_unlock())
     {
+        SetLastErrno(ERR_LOADER_UNLOCK);
         return NULL;
     }
     return address;
