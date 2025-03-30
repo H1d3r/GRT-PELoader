@@ -9,6 +9,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 
 	golang.org/x/sys v0.29.0
+
+	github.com/RSSU-Shellcode/Gleam-RT v0.0.0-20250329064937-8b9b09ad2fd4
 )
 
 require (

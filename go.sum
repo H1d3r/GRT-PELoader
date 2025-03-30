@@ -3,6 +3,8 @@ github.com/For-ACGN/LZSS v1.0.0/go.mod h1:tDZSnajYlOtkDujhgiAe4ItRQHdrlaJFcLOOlk
 github.com/For-ACGN/monkey v0.0.0-20240317114606-276cb1362405 h1:v0o9a8CBYTKnCOCq0dWJInqd6fyS/tn35Ddp1V212GM=
 github.com/RSSU-Shellcode/GRT-Develop v1.3.1 h1:9Li7+EP/6/UU/4YLGTfvyqj6qPjgbuXHImrXHpZZGJc=
 github.com/RSSU-Shellcode/GRT-Develop v1.3.1/go.mod h1:HrjPJ7mH9eKGkjW81rokn4MX/moGelQKEpeEJPzrgkQ=
+github.com/RSSU-Shellcode/Gleam-RT v0.0.0-20250329064937-8b9b09ad2fd4 h1:WQS2B3vqgpU636Xlz1c+/iKDw5NsTMWoI6QtxFxhU3Q=
+github.com/RSSU-Shellcode/Gleam-RT v0.0.0-20250329064937-8b9b09ad2fd4/go.mod h1:M6rqxskpJAJHWlX+VwOTxu5fdr0/Ncq8fnIwMlCfPhU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
