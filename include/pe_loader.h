@@ -55,13 +55,15 @@ typedef struct {
     // main thread return value or argument about call ExitProcess.
     uint ExitCode;
 
-    // get export method address if PE image is a DLL.
+    // get export procedure address by name, must call Execute before call it.
     GetProc_t GetProc;
 
-    // create a thread at EntryPoint, it can call multi times.
+    // create a thread at EntryPoint or call DllMain with DLL_PROCESS_ATTACH.
+    // it can call multi times.
     Execute_t Execute;
 
-    // release all resource, it can call multi times.
+    // release all resource or call DllMain with DLL_PROCESS_DETACH.
+    // it can call multi times.
     Exit_t Exit;
 
     // destroy all resource about PE loader, it can only call one time.
