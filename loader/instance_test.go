@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	testTplX86 []byte
-	testTplX64 []byte
+	testTplX86 []byte // TODO rename
+	testTplX64 []byte // TODO rename
 )
 
 func init() {
