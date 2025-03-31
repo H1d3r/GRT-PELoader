@@ -72,7 +72,7 @@ func TestEmbedPreCompress(t *testing.T) {
 		compressed, err := lzss.Compress(image, 4096)
 		require.NoError(t, err)
 
-		embed := NewEmbedPreCompress(compressed, len(image))
+		embed := NewEmbedPreCompress(compressed)
 
 		config, err := embed.Encode()
 		require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestEmbedInstance(t *testing.T) {
 			require.NoError(t, err)
 			embed1 := NewEmbed(image)
 			embed2 := NewEmbedCompress(image, 2048)
-			embed3 := NewEmbedPreCompress(preCompressed, len(image))
+			embed3 := NewEmbedPreCompress(preCompressed)
 
 			for _, img := range []Image{
 				embed1, embed2, embed3,
@@ -147,7 +147,7 @@ func TestEmbedInstance(t *testing.T) {
 			require.NoError(t, err)
 			embed1 := NewEmbed(image)
 			embed2 := NewEmbedCompress(image, 2048)
-			embed3 := NewEmbedPreCompress(preCompressed, len(image))
+			embed3 := NewEmbedPreCompress(preCompressed)
 
 			for _, img := range []Image{
 				embed1, embed2, embed3,
