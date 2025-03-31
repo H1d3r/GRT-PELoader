@@ -119,7 +119,7 @@ func TestHTTPInstance(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				inst, err := CreateInstance(testTplX86, 32, image, opts)
+				inst, err := CreateInstance(testLDRx86, 32, image, opts)
 				require.NoError(t, err)
 
 				addr := loadShellcode(t, inst)
@@ -147,7 +147,7 @@ func TestHTTPInstance(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				inst, err := CreateInstance(testTplX64, 64, image, opts)
+				inst, err := CreateInstance(testLDRx64, 64, image, opts)
 				require.NoError(t, err)
 
 				addr := loadShellcode(t, inst)
