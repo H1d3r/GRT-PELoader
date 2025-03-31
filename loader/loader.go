@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"syscall"
 	"unsafe"
+
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
 )
 
 type errno struct {
@@ -17,7 +19,8 @@ func (e *errno) Error() string {
 	return fmt.Sprintf("PELoaderM.%s return errno: 0x%08X", e.method, e.errno)
 }
 
-type PELoaderCfg struct {
+// Config contains configuration about initialize PE Loader.
+type Config struct {
 	// use custom FindAPI from Gleam-RT for hook.
 	FindAPI uintptr
 
@@ -48,6 +51,7 @@ type PELoaderCfg struct {
 	NotAdjustProtect bool
 }
 
+// PELoaderM contains exported methods of PE Loader.
 type PELoaderM struct {
 	// absolute memory address about PE entry point.
 	EntryPoint uintptr
@@ -72,25 +76,37 @@ type PELoaderM struct {
 	destroy uintptr
 }
 
+// InitPELoader is used to initialize PE Loader from shellcode instance.
+// Each shellcode instance can only initialize once.
+func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PELoaderM, error) {
+	ptr, _, err := syscall.SyscallN(
+		addr, uintptr(unsafe.Pointer(runtime)), uintptr(unsafe.Pointer(config)),
+	) // #nosec
+	if ptr == 0 {
+		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", err)
+	}
+	return (*PELoaderM)(unsafe.Pointer(ptr)), nil // #nosec
+}
+
 // GetProcAddress is used to get procedure address by name.
 func (ldr *PELoaderM) GetProcAddress(name string) (uintptr, error) {
 	ptr, err := syscall.BytePtrFromString(name)
 	if err != nil {
 		return 0, err
 	}
-	ret, _, en := syscall.SyscallN(ldr.getProc, uintptr(unsafe.Pointer(ptr)))
-	if ret == 0 {
+	proc, _, en := syscall.SyscallN(ldr.getProc, uintptr(unsafe.Pointer(ptr))) // #nosec
+	if proc == 0 {
 		return 0, &errno{method: "GetProc", errno: uintptr(en)}
 	}
-	return ret, nil
+	return proc, nil
 }
 
 // Execute is used to execute exe or call DllMain with DLL_PROCESS_ATTACH.
 // It can call multi times.
 func (ldr *PELoaderM) Execute() error {
-	ret, _, _ := syscall.SyscallN(ldr.execute)
-	if ret != 0 {
-		return &errno{method: "Execute", errno: ret}
+	en, _, _ := syscall.SyscallN(ldr.execute)
+	if en != 0 {
+		return &errno{method: "Execute", errno: en}
 	}
 	return nil
 }
@@ -98,9 +114,9 @@ func (ldr *PELoaderM) Execute() error {
 // Exit is used to exit exe or call DllMain with DLL_PROCESS_DETACH.
 // It can call multi times.
 func (ldr *PELoaderM) Exit(code uint) error {
-	ret, _, _ := syscall.SyscallN(ldr.exit, uintptr(code))
-	if ret != 0 {
-		return &errno{method: "Exit", errno: ret}
+	en, _, _ := syscall.SyscallN(ldr.exit, uintptr(code))
+	if en != 0 {
+		return &errno{method: "Exit", errno: en}
 	}
 	return nil
 }
@@ -108,9 +124,9 @@ func (ldr *PELoaderM) Exit(code uint) error {
 // Destroy is used to destroy all resource about PE loader.
 // It can only call one time.
 func (ldr *PELoaderM) Destroy() error {
-	ret, _, _ := syscall.SyscallN(ldr.destroy)
-	if ret != 0 {
-		return &errno{method: "Destroy", errno: ret}
+	en, _, _ := syscall.SyscallN(ldr.destroy)
+	if en != 0 {
+		return &errno{method: "Destroy", errno: en}
 	}
 	return nil
 }
