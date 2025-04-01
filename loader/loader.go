@@ -56,9 +56,8 @@ type PELoaderM struct {
 	// absolute memory address about PE entry point.
 	EntryPoint uintptr
 
-	// about PE image type and is a managed image.
-	IsDLL    bool
-	IsDotnet bool
+	// this PE image is a DLL.
+	IsDLL bool
 
 	// main thread return value or argument about call ExitProcess.
 	ExitCode uint
