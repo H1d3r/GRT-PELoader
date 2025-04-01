@@ -48,9 +48,8 @@ typedef struct {
     // absolute memory address about PE entry point.
     void* EntryPoint;
 
-    // about PE image type and is a managed image.
+	// this PE image is a DLL.
     bool IsDLL;
-    bool IsDotnet;
 
     // main thread return value or argument about call ExitProcess.
     uint ExitCode;
