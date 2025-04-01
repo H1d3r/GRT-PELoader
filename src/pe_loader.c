@@ -314,9 +314,9 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->IsDLL      = loader->IsDLL;
     module->ExitCode   = 0;
     // loader module methods
+    module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Execute = GetFuncAddr(&LDR_Execute);
     module->Exit    = GetFuncAddr(&LDR_Exit);
-    module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Destroy = GetFuncAddr(&LDR_Destroy);
     // record return value pointer;
     loader->ExitCode = &module->ExitCode;
