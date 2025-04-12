@@ -9,11 +9,11 @@
     #define NAME_LDR_MUTEX_STATUS NULL
 #else
 #ifdef _WIN64
-    #define NAME_LDR_MUTEX_GLOBAL "LDR_Global_x64"
-    #define NAME_LDR_MUTEX_STATUS "LDR_Status_x64"
+    #define NAME_LDR_MUTEX_GLOBAL "x64_LDR_Global"
+    #define NAME_LDR_MUTEX_STATUS "x64_LDR_Status"
 #elif _WIN32
-    #define NAME_LDR_MUTEX_GLOBAL "LDR_Global_x86"
-    #define NAME_LDR_MUTEX_STATUS "LDR_Status_x86"
+    #define NAME_LDR_MUTEX_GLOBAL "x86_LDR_Global"
+    #define NAME_LDR_MUTEX_STATUS "x86_LDR_Status"
 #endif
 #endif // RELEASE_MODE
 
