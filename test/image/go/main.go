@@ -25,7 +25,6 @@ var (
 )
 
 func main() {
-	// test flags
 	testRuntimeAPI()
 	testMemoryData()
 	testGoRoutine()
@@ -41,23 +40,32 @@ func main() {
 }
 
 func testRuntimeAPI() {
-	dll := syscall.NewLazyDLL("kernel32.dll")
-	hModule := syscall.Handle(dll.Handle())
-	GetProcAddress := dll.NewProc("GetProcAddress").Addr()
-	fmt.Printf("GetProcAddress: 0x%X\n", GetProcAddress)
+	GleamRT, err := syscall.LoadDLL("GleamRT.dll")
+	if err != nil {
+		fmt.Println("[warning] failed to load runtime virtual dll")
+		return
+	}
+	hGleamRT := GleamRT.Handle
+	hKernel32 := modKernel32.Handle()
 
+	// find runtime methods
 	for _, proc := range []string{
-		"RT_GetProcAddressByName",
-		"RT_GetProcAddressByHash",
-		"RT_GetProcAddressOriginal",
+		"GetProcAddressByName",
+		"GetProcAddressByHash",
+		"GetProcAddressOriginal",
+		"ExitProcess",
+		"AS_GetValue",
+		"AS_GetPointer",
+		"AS_Erase",
+		"AS_EraseAll",
+		"IMS_SetValue",
+		"IMS_GetValue",
+		"IMS_GetPointer",
+		"IMS_Delete",
+		"IMS_DeleteAll",
 	} {
-		err := dll.NewProc(proc).Find()
-		if err != nil {
-			fmt.Println("[warning] failed to find runtime methods")
-			return
-		}
-		dllProcAddr := dll.NewProc(proc).Addr()
-		getProcAddr, err := syscall.GetProcAddress(hModule, proc)
+		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
+		getProcAddr, err := syscall.GetProcAddress(hGleamRT, proc)
 		checkError(err)
 		if dllProcAddr != getProcAddr {
 			log.Fatalln("unexpected proc address")
@@ -66,21 +74,20 @@ func testRuntimeAPI() {
 	}
 	fmt.Println()
 
-	GetProcAddressOriginal, err := syscall.GetProcAddress(hModule, "RT_GetProcAddressOriginal")
-	checkError(err)
-
 	// get original GetProcAddress
+	GetProcAddressOriginal, err := syscall.GetProcAddress(hGleamRT, "GetProcAddressOriginal")
+	checkError(err)
 	procName, err := syscall.BytePtrFromString("GetProcAddress")
 	checkError(err)
-
 	ret, _, _ := syscall.SyscallN(
 		GetProcAddressOriginal,
-		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)), // #nosec
+		hKernel32, (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
 	if ret == 0 {
 		log.Fatalln("failed to get GetProcAddress address")
 	}
-
+	// get hooked GetProcAddress
+	GetProcAddress := modKernel32.NewProc("GetProcAddress").Addr()
 	fmt.Printf("Original GetProcAddress: 0x%X\n", ret)
 	fmt.Printf("Hooked   GetProcAddress: 0x%X\n", GetProcAddress)
 
@@ -89,24 +96,27 @@ func testRuntimeAPI() {
 	checkError(err)
 	ret, _, _ = syscall.SyscallN(
 		GetProcAddressOriginal,
-		uintptr(hModule), (uintptr)(unsafe.Pointer(procName)), // #nosec
+		hKernel32, (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
 	if ret == 0 {
 		log.Fatalln("failed to get GetProcAddress address")
 	}
-
-	VirtualAlloc, err := syscall.GetProcAddress(hModule, "VirtualAlloc")
+	// get hooked VirtualAlloc
+	VirtualAlloc, err := syscall.GetProcAddress(syscall.Handle(hKernel32), "VirtualAlloc")
 	checkError(err)
-
 	fmt.Printf("Original VirtualAlloc: 0x%X\n", ret)
 	fmt.Printf("Hooked   VirtualAlloc: 0x%X\n", VirtualAlloc)
 
-	// check msvcrt
-	dll = syscall.NewLazyDLL("msvcrt.dll")
+	err = GleamRT.Release()
+	checkError(err)
+
+	// check msvcrt.dll
+	dll := syscall.NewLazyDLL("msvcrt.dll")
 	proc := dll.NewProc("malloc")
 	fmt.Printf("msvcrt.malloc: 0x%X\n", proc.Addr())
 	proc = dll.NewProc("free")
 	fmt.Printf("msvcrt.free:   0x%X\n", proc.Addr())
+	fmt.Println()
 }
 
 var globalVar = 12345678
@@ -253,7 +263,6 @@ func kernel32Sleep() {
 		for {
 			// wait go routine run other test
 			time.Sleep(1 + time.Duration(rand.Intn(1000))*time.Millisecond) // #nosec
-
 			// trigger Gleam-RT SleepHR
 			fmt.Println("call kernel32.Sleep [hooked]")
 			now := time.Now()
