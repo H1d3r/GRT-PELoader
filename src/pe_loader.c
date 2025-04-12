@@ -1017,9 +1017,19 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     uint16 module[MAX_PATH];
     mem_init(module, sizeof(module));
     // get module file name
-    if (GetModuleFileName(hModule, module, sizeof(module)) == 0)
+    if (hModule == HMODULE_GLEAM_RT)
     {
-        return NULL;
+        uint16 mod[] = {
+            L'G', L'l', L'e', L'a', L'm', L'R', L'T', 
+            L'.', L'd', L'l', L'l', 0x0000,
+        };
+        mem_copy(module, mod, sizeof(mod));
+    } else {
+        if (GetModuleFileName(hModule, module, sizeof(module)) == 0)
+        {
+            SetLastErrno(ERR_LOADER_NOT_FOUND_MODULE);
+            return NULL;
+        }
     }
     // check is PE Loader internal methods
     void* method = ldr_GetMethods(module, lpProcName);
@@ -2232,7 +2242,8 @@ void loadCommandLineToArgv()
 
     // make sure shell32.dll is loaded
     byte dllName[] = {
-        's', 'h', 'e', 'l', 'l', '3', '2', '.', 'd', 'l', 'l', '\x00'
+        's', 'h', 'e', 'l', 'l', '3', '2', 
+        '.', 'd', 'l', 'l', '\x00'
     };
     HMODULE hShell32 = loader->LoadLibraryA(dllName);
     if (hShell32 == NULL)
@@ -2504,9 +2515,6 @@ errno LDR_Execute()
         // make callback about DLL_PROCESS_DETACH
         if (loader->IsDLL)
         {
-            // TODO recover
-            // ldr_alloc_tls_block();
-            // ldr_tls_callback(DLL_PROCESS_ATTACH);
             if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
             {
                 errno = ERR_LOADER_CALL_DLL_MAIN;
@@ -2518,6 +2526,7 @@ errno LDR_Execute()
         // change the running status
         set_running(true);
         // create thread at entry point
+        // TODO no new thread
         void* addr = GetFuncAddr(&pe_entry_point);
         HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
         if (hThread == NULL)
