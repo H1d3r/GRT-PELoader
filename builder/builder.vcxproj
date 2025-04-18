@@ -14,7 +14,7 @@
     <ClInclude Include="build.h" />
     <ClInclude Include="..\boot\boot.h" />
     <ClInclude Include="..\include\c_types.h" />
-	<ClInclude Include="..\include\win_types.h" />
+    <ClInclude Include="..\include\win_types.h" />
     <ClInclude Include="..\include\dll_kernel32.h" />
     <ClInclude Include="..\include\dll_msvcrt.h" />
     <ClInclude Include="..\include\dll_shell32.h" />
@@ -24,13 +24,12 @@
     <ClInclude Include="..\include\rel_addr.h" />
     <ClInclude Include="..\include\hash_api.h" />
     <ClInclude Include="..\include\random.h" />
-	<ClInclude Include="..\include\pe_image.h" />	  
+    <ClInclude Include="..\include\pe_image.h" />
     <ClInclude Include="..\include\win_api.h" />
     <ClInclude Include="..\include\errno.h" />
     <ClInclude Include="..\include\runtime.h" />
     <ClInclude Include="..\include\pe_loader.h" />
     <ClInclude Include="..\include\debug.h" />
-    <ClInclude Include="..\include\epilogue.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="builder.c" />
@@ -65,7 +64,6 @@
     </MASM>
     <MASM Include="..\asm\_random.asm" />
     <MASM Include="..\asm\runtime.asm" />
-    <MASM Include="..\asm\epilogue.asm" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
