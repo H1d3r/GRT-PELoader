@@ -18,26 +18,27 @@ var (
 	arch   int
 	pePath string
 
-	options   loader.Options
 	compress  bool
 	comWindow int
 	httpOpts  loader.HTTPOptions
+	options   loader.Options
 
 	outPath string
 )
 
 func init() {
 	flag.StringVar(&tplDir, "tpl", "template", "set shellcode templates directory")
-	flag.StringVar(&mode, "mode", "", "select load mode")
+	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
 	flag.IntVar(&arch, "arch", 0, "set shellcode template architecture")
-	flag.StringVar(&pePath, "pe", "", "set input PE file path")
-	flag.StringVar(&options.ImageName, "im", "", "set the image name about command line")
+	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
+	flag.BoolVar(&compress, "compress", true, "compress image when use embed mode")
+	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
+	flag.DurationVar(&httpOpts.ConnectTimeout, "timeout", 0, "set the timeout when use http mode")
+	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
-	flag.BoolVar(&compress, "compress", true, "compress image when use embed mode")
-	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
-	flag.StringVar(&outPath, "o", "output.bin", "set output file path")
+	flag.StringVar(&outPath, "o", "output.bin", "set output shellcode file path")
 	option.Flag(&options.Runtime)
 	flag.Parse()
 }
