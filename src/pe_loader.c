@@ -310,6 +310,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     // create methods for loader
     PELoader_M* module = (PELoader_M*)moduleAddr;
     // process variables
+    module->ImageBase  = (void*)(loader->PEImage);
     module->EntryPoint = (void*)(loader->EntryPoint);
     module->IsDLL      = loader->IsDLL;
     module->ExitCode   = 0;
@@ -611,13 +612,19 @@ static bool mapSections(PELoader* loader)
     uint64 seed = (uint64)(GetFuncAddr(&InitPELoader));
     uint32 size = loader->ImageSize;
     size += (uint32)((1 + RandUintN(seed, 128)) * 4096);
-    // allocate memory for write PE image 
-    void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    // allocate memory for write PE image
+    void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (mem == NULL)
     {
         return false;
     }
     loader->PEImage = (uintptr)mem;
+    // adjust memory page for execute PE image
+    DWORD old;
+    if (!loader->VirtualProtect(mem, size, PAGE_EXECUTE_READWRITE, &old))
+    {
+        return false;
+    }
     // lock memory region with special argument for reuse PE image
 #ifndef NO_RUNTIME
     if (!loader->Runtime->Memory.Lock(mem))
@@ -2588,19 +2595,17 @@ errno LDR_Destroy()
     }
 
     errno err = NO_ERROR;
-    if (!loader->Config.NotEraseInstruction)
+    if (loader->Config.NotEraseInstruction)
     {
         DWORD oldProtect;
         if (!adjustPageProtect(loader, &oldProtect) && err == NO_ERROR)
         {
             err = ERR_LOADER_ADJUST_PROTECT;
         }
-
         if (!recoverPELoaderPointer(loader) && err == NO_ERROR)
         {
             err = ERR_LOADER_RECOVER_INST;
         }
-
         if (!recoverPageProtect(loader, oldProtect) && err == NO_ERROR)
         {
             err = ERR_LOADER_RECOVER_PROTECT;
