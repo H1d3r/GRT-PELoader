@@ -45,6 +45,9 @@ typedef struct {
 } PELoader_Cfg;
 
 typedef struct {
+    // absolute memory address about PE image base.
+    void* ImageBase;
+
     // absolute memory address about PE entry point.
     void* EntryPoint;
 
