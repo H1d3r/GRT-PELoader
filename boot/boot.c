@@ -5,7 +5,6 @@
 #include "errno.h"
 #include "runtime.h"
 #include "pe_loader.h"
-#include "epilogue.h"
 #include "boot.h"
 
 static errno loadOption(Runtime_Opts* options);
