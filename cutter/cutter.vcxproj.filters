@@ -100,12 +100,12 @@
     <ClCompile Include="..\src\win_api.c">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="cutter.c">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\asm\epilogue.asm">
-      <Filter>Assembly</Filter>
-    </MASM>
-    <MASM Include="..\asm\runtime.asm">
       <Filter>Assembly</Filter>
     </MASM>
     <MASM Include="..\asm\msvc\ullrem.asm">
