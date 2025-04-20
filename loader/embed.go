@@ -40,7 +40,7 @@ type Embed struct {
 	preCompress bool
 }
 
-// NewEmbed is used to create image config with embed mode.
+// NewEmbed is used to create image with embed mode.
 func NewEmbed(image []byte) Image {
 	return &Embed{image: image}
 }
@@ -74,19 +74,19 @@ func (e *Embed) Encode() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid PE image: %s", err)
 	}
-	config := bytes.NewBuffer(make([]byte, 0, 16))
+	buffer := bytes.NewBuffer(make([]byte, 0, 16*1024))
 	// write the mode
-	config.WriteByte(modeEmbed)
+	buffer.WriteByte(modeEmbed)
 	// need use compress mode
 	if !e.compress {
 		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image))) // #nosec
-		config.WriteByte(disableCompress)
-		config.Write(size)
-		config.Write(e.image)
-		return config.Bytes(), nil
+		buffer.WriteByte(disableCompress)
+		buffer.Write(size)
+		buffer.Write(e.image)
+		return buffer.Bytes(), nil
 	}
 	// set the compressed flag
-	config.WriteByte(enableCompress)
+	buffer.WriteByte(enableCompress)
 	// compress PE image
 	var compressed []byte
 	if !e.preCompress {
@@ -99,13 +99,13 @@ func (e *Embed) Encode() ([]byte, error) {
 	}
 	// write raw size
 	size := binary.LittleEndian.AppendUint32(nil, uint32(len(image))) // #nosec
-	config.Write(size)
+	buffer.Write(size)
 	// write compressed size
 	size = binary.LittleEndian.AppendUint32(nil, uint32(len(compressed))) // #nosec
-	config.Write(size)
+	buffer.Write(size)
 	// write compressed PE image
-	config.Write(compressed)
-	return config.Bytes(), nil
+	buffer.Write(compressed)
+	return buffer.Bytes(), nil
 }
 
 // Mode implement Image interface.
