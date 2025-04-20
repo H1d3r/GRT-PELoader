@@ -10,14 +10,14 @@ import (
 	"github.com/RSSU-Shellcode/GRT-Develop/option"
 )
 
-// the load mode about image source.
+// load mode about image source.
 const (
 	ModeEmbed = "embed"
 	ModeFile  = "file"
 	ModeHTTP  = "http"
 )
 
-// Image contain variable load mode.
+// Image contains the various load mode.
 type Image interface {
 	// Encode is used to encode image config to binary.
 	Encode() ([]byte, error)
@@ -56,7 +56,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		opts = new(Options)
 	}
 	// encode PE image configuration
-	config, err := image.Encode()
+	peImage, err := image.Encode()
 	if err != nil {
 		return nil, fmt.Errorf("invalid %s mode config: %s", image.Mode(), err)
 	}
@@ -107,7 +107,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
 	}
 	args := []*argument.Arg{
-		{ID: 1, Data: config},
+		{ID: 1, Data: peImage},
 		{ID: 2, Data: cmdLineA},
 		{ID: 3, Data: cmdLineW},
 		{ID: 4, Data: waitMain},
