@@ -53,6 +53,9 @@ type Config struct {
 
 // PELoaderM contains exported methods of PE Loader.
 type PELoaderM struct {
+	// absolute memory address about PE image base.
+	ImageBase uintptr
+
 	// absolute memory address about PE entry point.
 	EntryPoint uintptr
 
