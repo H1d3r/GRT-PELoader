@@ -17,19 +17,19 @@ type File struct {
 	Path string
 }
 
-// NewFile is used to create image config with local file mode.
+// NewFile is used to create image with local file mode.
 func NewFile(path string) Image {
 	return &File{Path: path}
 }
 
 // Encode implement Image interface.
 func (f *File) Encode() ([]byte, error) {
-	config := bytes.NewBuffer(make([]byte, 0, 32))
+	buffer := bytes.NewBuffer(make([]byte, 0, 128))
 	// write the mode
-	config.WriteByte(modeFile)
+	buffer.WriteByte(modeFile)
 	// write the file path
-	config.WriteString(stringToUTF16(f.Path))
-	return config.Bytes(), nil
+	buffer.WriteString(stringToUTF16(f.Path))
+	return buffer.Bytes(), nil
 }
 
 // Mode implement Image interface.
