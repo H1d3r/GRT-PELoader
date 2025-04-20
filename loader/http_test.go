@@ -32,6 +32,7 @@ func TestHTTP(t *testing.T) {
 		opts := &HTTPOptions{
 			Headers:   headers,
 			UserAgent: "ua",
+			ProxyURL:  "http://127.0.0.1:8080/",
 		}
 		image := NewHTTP(testURL, opts)
 
@@ -43,6 +44,18 @@ func TestHTTP(t *testing.T) {
 
 	t.Run("invalid URL", func(t *testing.T) {
 		image := NewHTTP("invalid url", nil)
+
+		config, err := image.Encode()
+		errStr := "parse \"invalid url\": invalid URI for request"
+		require.EqualError(t, err, errStr)
+		require.Nil(t, config)
+	})
+
+	t.Run("invalid proxy URL", func(t *testing.T) {
+		opts := &HTTPOptions{
+			ProxyURL: "invalid url",
+		}
+		image := NewHTTP(testURL, opts)
 
 		config, err := image.Encode()
 		errStr := "parse \"invalid url\": invalid URI for request"
