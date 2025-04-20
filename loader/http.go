@@ -40,7 +40,7 @@ type HTTPOptions struct {
 	AccessType  uint8
 }
 
-// NewHTTP is used to create image config with HTTP mode.
+// NewHTTP is used to create image with HTTP mode.
 func NewHTTP(url string, opts *HTTPOptions) Image {
 	if opts == nil {
 		opts = &HTTPOptions{}
@@ -89,12 +89,12 @@ func (h *HTTP) Encode() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	config := bytes.NewBuffer(make([]byte, 0, 512))
+	buffer := bytes.NewBuffer(make([]byte, 0, 512))
 	// write the mode
-	config.WriteByte(modeHTTP)
+	buffer.WriteByte(modeHTTP)
 	// write the winhttp request
-	config.Write(data)
-	return config.Bytes(), nil
+	buffer.Write(data)
+	return buffer.Bytes(), nil
 }
 
 // Mode implement Image interface.
