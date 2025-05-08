@@ -84,6 +84,7 @@ typedef struct {
     int64 NumFiles;
     int64 NumDirectories;
     int64 NumIOCPs;
+    int64 NumKeys;
     int64 NumSockets;
 } RT_Status;
 #endif // MOD_RESOURCE_H
@@ -269,6 +270,23 @@ typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 typedef uint32 (*Serialize_t)(uint32* descriptor, void* data, void* serialized);
 typedef bool   (*Unserialize_t)(void* serialized, void* data);
 
+// about memory scanner module
+// 
+// MemScan is used to scans data in the memory of the current process.
+// The return value is the number of results scanned, if failed to
+// scan, it will return -1, use the GetLastErrno for get error code.
+// 
+// [WARNING]
+// You need to manually exclude certain scan results, such as the "value"
+// stored in the stack as a argument for MemScanByValue.
+// 
+// example:
+//   uintptr results[10];
+//   MemScanByPattern("F1 F2 ?? A1", results, arrlen(results));
+typedef uint (*MemScanByValue_t)(void* value, uint size, uintptr* results, uint maxItem);
+typedef uint (*MemScanByPattern_t)(byte* pattern, uintptr* results, uint maxItem);
+typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
+
 // GetProcAddress, GetProcAddressByName and GetProcAddressByHash
 // are use Hash API module for implement original GetProcAddress.
 // GetProcAddressOriginal is not recommend, usually use
@@ -277,6 +295,15 @@ typedef bool   (*Unserialize_t)(void* serialized, void* data);
 typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, bool hook);
 typedef void* (*GetProcByHash_t)(uint hash, uint key, bool hook);
 typedef void* (*GetProcOriginal_t)(HMODULE hModule, LPCSTR lpProcName);
+
+// about sysmon
+#ifndef SYSMON_H
+typedef struct {
+    int64 NumNormal;
+    int64 NumRecover;
+    int64 NumPanic;
+} SM_Status;
+#endif // SYSMON_H
 
 // about runtime core methods
 //
@@ -292,6 +319,7 @@ typedef struct {
     MT_Status Memory;
     TT_Status Thread;
     RT_Status Resource;
+    SM_Status Sysmon;
 } Runtime_Metrics;
 
 typedef errno (*SleepHR_t)(uint32 milliseconds);
@@ -430,6 +458,12 @@ typedef struct {
         Serialize_t   Serialize;
         Unserialize_t Unserialize;
     } Serialization;
+
+    struct {
+        MemScanByValue_t   ScanByValue;
+        MemScanByPattern_t ScanByPattern;
+        BinToPattern_t     BinToPattern;
+    } MemScanner;
 
     struct {
         GetProcByName_t   GetProcByName;
