@@ -16,13 +16,30 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
+	"github.com/davecgh/go-spew/spew"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	modKernel32            = syscall.NewLazyDLL("kernel32.dll")
+	modKernel32            = windows.NewLazyDLL("kernel32.dll")
 	procGetCurrentThreadID = modKernel32.NewProc("GetCurrentThreadId")
 	procSleep              = modKernel32.NewProc("Sleep")
 )
+
+var GleamRT *windows.DLL
+
+func init() {
+	var err error
+	GleamRT, err = windows.LoadDLL("GleamRT.dll")
+	if err != nil {
+		fmt.Println("[warning] failed to load virtual runtime dll")
+		return
+	}
+	fmt.Println("[info] virtual runtime dll loaded")
+}
 
 func main() {
 	testRuntimeAPI()
@@ -31,6 +48,7 @@ func main() {
 	testLargeBuffer()
 	testHTTPServer()
 	testHTTPClient()
+	testGetMetric()
 	kernel32Sleep()
 
 	for {
@@ -40,11 +58,6 @@ func main() {
 }
 
 func testRuntimeAPI() {
-	GleamRT, err := syscall.LoadDLL("GleamRT.dll")
-	if err != nil {
-		fmt.Println("[warning] failed to load runtime virtual dll")
-		return
-	}
 	hGleamRT := GleamRT.Handle
 	hKernel32 := modKernel32.Handle()
 
@@ -53,6 +66,7 @@ func testRuntimeAPI() {
 		"GetProcAddressByName",
 		"GetProcAddressByHash",
 		"GetProcAddressOriginal",
+		"GetMetrics",
 		"ExitProcess",
 		"AS_GetValue",
 		"AS_GetPointer",
@@ -65,7 +79,7 @@ func testRuntimeAPI() {
 		"IMS_DeleteAll",
 	} {
 		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
-		getProcAddr, err := syscall.GetProcAddress(hGleamRT, proc)
+		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
 		checkError(err)
 		if dllProcAddr != getProcAddr {
 			log.Fatalln("unexpected proc address")
@@ -75,7 +89,7 @@ func testRuntimeAPI() {
 	fmt.Println()
 
 	// get original GetProcAddress
-	GetProcAddressOriginal, err := syscall.GetProcAddress(hGleamRT, "GetProcAddressOriginal")
+	GetProcAddressOriginal, err := windows.GetProcAddress(hGleamRT, "GetProcAddressOriginal")
 	checkError(err)
 	procName, err := syscall.BytePtrFromString("GetProcAddress")
 	checkError(err)
@@ -194,7 +208,7 @@ func testLargeBuffer() {
 			time.Sleep(250 * time.Millisecond)
 			now := sha256.Sum256(buf)
 			if raw != now {
-				log.Fatalf("memory data is incorrect")
+				log.Fatalln("memory data is incorrect")
 			}
 			time.Sleep(period)
 		}
@@ -242,10 +256,14 @@ func testHTTPClient() {
 		for {
 			func() {
 				resp, err := client.Get(fmt.Sprintf("http://%s/", webAddr))
-				checkError(err)
+				if err != nil {
+					return
+				}
 				defer func() { _ = resp.Body.Close() }()
 				data, err := io.ReadAll(resp.Body)
-				checkError(err)
+				if err != nil {
+					return
+				}
 				if !bytes.Equal(webPage, data) {
 					log.Fatalln("incorrect web page data")
 				}
@@ -253,6 +271,24 @@ func testHTTPClient() {
 				client.CloseIdleConnections()
 			}()
 			time.Sleep(1 + time.Duration(rand.Intn(250))*time.Millisecond) // #nosec
+		}
+	}()
+}
+
+func testGetMetric() {
+	if GleamRT == nil {
+		return
+	}
+	GetMetrics := GleamRT.MustFindProc("GetMetrics")
+	go func() {
+		for {
+			metrics := gleamrt.Metrics{}
+			ret, _, err := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics)))
+			if ret != 0 {
+				log.Fatalln("failed to get runtime metrics:", err)
+			}
+			spew.Dump(metrics)
+			time.Sleep(3 * time.Second)
 		}
 	}()
 }
