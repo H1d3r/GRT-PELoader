@@ -1086,15 +1086,15 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0x677E9E5FFC09596F, 0xF0CDF0DC4A6693B0, GetFuncAddr(&hook_ucrtbase_p_argc)        },
         { 0x348408E3C4C1F84A, 0x00D6384B5E49BE4E, GetFuncAddr(&hook_ucrtbase_p_argv)        },
         { 0xE4963C275A179C3A, 0x56818722C1E69D4F, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
-        { 0xAA136812DF9EB160, 0x42548B3C4280B19A, GetFuncAddr(&hook_ucrtbase_atexit)        },// _crt_atexit
-        { 0x4E7A26901BB3EC62, 0x386F945605B7A0AC, GetFuncAddr(&hook_ucrtbase_atexit)        },// _crt_at_quick_exit
-        { 0x02C65C1FF64C3E77, 0x6D3D2282E138D2B7, GetFuncAddr(&hook_ucrtbase_onexit)        },// _register_onexit_function
+        { 0xAA136812DF9EB160, 0x42548B3C4280B19A, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_atexit
+        { 0x4E7A26901BB3EC62, 0x386F945605B7A0AC, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
+        { 0x02C65C1FF64C3E77, 0x6D3D2282E138D2B7, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
         { 0xD806168873719B4E, 0x477C6E75E8D61A35, GetFuncAddr(&hook_ucrtbase_exit)          },
-        { 0xE2C10C718CBC4B4A, 0x006ACBD0EBFF8DCE, GetFuncAddr(&hook_ucrtbase_exit)          },// _exit
-        { 0x84A9F41391B0C0E4, 0x41C04E4C5EEED31D, GetFuncAddr(&hook_ucrtbase_exit)          },// _Exit
-        { 0xB3AD674905D869E3, 0x31970EFAD3DA5C17, GetFuncAddr(&hook_ucrtbase_exit)          },// _cexit
-        { 0x2ACDB535FEF2CD76, 0x127E8E9F16D87088, GetFuncAddr(&hook_ucrtbase_exit)          },// _c_exit
-        { 0x8B23415012EA8D5B, 0xBA6276780F17E45E, GetFuncAddr(&hook_ucrtbase_exit)          },// quick_exit
+        { 0xE2C10C718CBC4B4A, 0x006ACBD0EBFF8DCE, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
+        { 0x84A9F41391B0C0E4, 0x41C04E4C5EEED31D, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
+        { 0xB3AD674905D869E3, 0x31970EFAD3DA5C17, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
+        { 0x2ACDB535FEF2CD76, 0x127E8E9F16D87088, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
+        { 0x8B23415012EA8D5B, 0xBA6276780F17E45E, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
         { 0x3CC1F09F6B644BFA, 0xA620C2F1A2247C65, GetFuncAddr(&hook_ucrtbase_beginthread)   },
         { 0xB37DC4391224F516, 0x5660750ECAE84417, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
         { 0x7617799FD759FB6A, 0x02FED24E7D32EFD4, GetFuncAddr(&hook_ucrtbase_endthread)     },
@@ -1136,11 +1136,11 @@ static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
         { 0xB1BF5E08, 0x404C0CF9, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
         { 0xD3745DD0, 0x67D5DACC, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
         { 0x1207ACD2, 0x8560B050, GetFuncAddr(&hook_ucrtbase_exit)          },
-        { 0x092BEA87, 0xE370C726, GetFuncAddr(&hook_ucrtbase_exit)          },// _exit
-        { 0x81BCEF46, 0xD0EAB5F5, GetFuncAddr(&hook_ucrtbase_exit)          },// _Exit
-        { 0x73C7582D, 0x3AFEF1E0, GetFuncAddr(&hook_ucrtbase_exit)          },// _cexit
-        { 0xB40F5BCE, 0x3DA209E2, GetFuncAddr(&hook_ucrtbase_exit)          },// _c_exit
-        { 0xE6A5BAB4, 0xCA976959, GetFuncAddr(&hook_ucrtbase_exit)          },// quick_exit
+        { 0x092BEA87, 0xE370C726, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
+        { 0x81BCEF46, 0xD0EAB5F5, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
+        { 0x73C7582D, 0x3AFEF1E0, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
+        { 0xB40F5BCE, 0x3DA209E2, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
+        { 0xE6A5BAB4, 0xCA976959, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
         { 0x033589BB, 0x2BE6FFB1, GetFuncAddr(&hook_ucrtbase_beginthread)   },
         { 0xD787345F, 0xC0B107F6, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
         { 0xD98CB670, 0xBF7AD081, GetFuncAddr(&hook_ucrtbase_endthread)     },
@@ -2490,6 +2490,7 @@ errno LDR_Execute()
         return ERR_LOADER_LOCK;
     }
 
+    HANDLE hThread = NULL;
     errno errno = NO_ERROR;
     for (;;)
     {
@@ -2535,13 +2536,23 @@ errno LDR_Execute()
         // create thread at entry point
         // TODO no new thread
         void* addr = GetFuncAddr(&pe_entry_point);
-        HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
+        hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
         if (hThread == NULL)
         {
             errno = ERR_LOADER_CREATE_MAIN_THREAD;
             set_running(false);
             break;
         }
+        break;
+    }
+
+    if (!ldr_unlock())
+    {
+        return ERR_LOADER_UNLOCK;
+    }
+
+    if (hThread != NULL)
+    {
         // wait main thread exit
         if (loader->Config.WaitMain)
         {
@@ -2549,12 +2560,6 @@ errno LDR_Execute()
             set_running(false);
         }
         loader->CloseHandle(hThread);
-        break;
-    }
-
-    if (!ldr_unlock())
-    {
-        return ERR_LOADER_UNLOCK;
     }
     return errno;
 }
