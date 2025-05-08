@@ -10,6 +10,11 @@ import (
 	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
 )
 
+const (
+	null    = 0
+	noError = 0
+)
+
 type errno struct {
 	method string
 	errno  uintptr
@@ -84,7 +89,7 @@ func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PEL
 	ptr, _, err := syscall.SyscallN(
 		addr, uintptr(unsafe.Pointer(runtime)), uintptr(unsafe.Pointer(config)),
 	) // #nosec
-	if ptr == 0 {
+	if ptr == null {
 		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", err)
 	}
 	return (*PELoaderM)(unsafe.Pointer(ptr)), nil // #nosec
@@ -97,7 +102,7 @@ func (ldr *PELoaderM) GetProcAddress(name string) (uintptr, error) {
 		return 0, err
 	}
 	proc, _, en := syscall.SyscallN(ldr.getProc, uintptr(unsafe.Pointer(ptr))) // #nosec
-	if proc == 0 {
+	if proc == null {
 		return 0, &errno{method: "GetProc", errno: uintptr(en)}
 	}
 	return proc, nil
@@ -107,7 +112,7 @@ func (ldr *PELoaderM) GetProcAddress(name string) (uintptr, error) {
 // It can call multi times.
 func (ldr *PELoaderM) Execute() error {
 	en, _, _ := syscall.SyscallN(ldr.execute)
-	if en != 0 {
+	if en != noError {
 		return &errno{method: "Execute", errno: en}
 	}
 	return nil
@@ -117,7 +122,7 @@ func (ldr *PELoaderM) Execute() error {
 // It can call multi times.
 func (ldr *PELoaderM) Exit(code uint) error {
 	en, _, _ := syscall.SyscallN(ldr.exit, uintptr(code))
-	if en != 0 {
+	if en != noError {
 		return &errno{method: "Exit", errno: en}
 	}
 	return nil
@@ -127,7 +132,7 @@ func (ldr *PELoaderM) Exit(code uint) error {
 // It can only call one time.
 func (ldr *PELoaderM) Destroy() error {
 	en, _, _ := syscall.SyscallN(ldr.destroy)
-	if en != 0 {
+	if en != noError {
 		return &errno{method: "Destroy", errno: en}
 	}
 	return nil
