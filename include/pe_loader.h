@@ -51,7 +51,7 @@ typedef struct {
     // absolute memory address about PE entry point.
     void* EntryPoint;
 
-	// this PE image is a DLL.
+    // this PE image is a DLL.
     bool IsDLL;
 
     // main thread return value or argument about call ExitProcess.
