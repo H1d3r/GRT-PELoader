@@ -23,6 +23,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+const (
+	null    = 0
+	noError = 0
+)
+
 var (
 	modKernel32            = windows.NewLazyDLL("kernel32.dll")
 	procGetCurrentThreadID = modKernel32.NewProc("GetCurrentThreadId")
@@ -48,6 +53,7 @@ func main() {
 	testLargeBuffer()
 	testHTTPServer()
 	testHTTPClient()
+	testWatchdog()
 	testGetMetric()
 	kernel32Sleep()
 
@@ -97,7 +103,7 @@ func testRuntimeAPI() {
 		GetProcAddressOriginal,
 		hKernel32, (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
-	if ret == 0 {
+	if ret == null {
 		log.Fatalln("failed to get GetProcAddress address")
 	}
 	// get hooked GetProcAddress
@@ -112,8 +118,8 @@ func testRuntimeAPI() {
 		GetProcAddressOriginal,
 		hKernel32, (uintptr)(unsafe.Pointer(procName)), // #nosec
 	)
-	if ret == 0 {
-		log.Fatalln("failed to get GetProcAddress address")
+	if ret == null {
+		log.Fatalln("failed to get VirtualAlloc address")
 	}
 	// get hooked VirtualAlloc
 	VirtualAlloc, err := syscall.GetProcAddress(syscall.Handle(hKernel32), "VirtualAlloc")
@@ -275,6 +281,46 @@ func testHTTPClient() {
 	}()
 }
 
+func testWatchdog() {
+	if GleamRT == nil {
+		return
+	}
+	var (
+		Kick       = GleamRT.MustFindProc("WD_Kick")
+		Enable     = GleamRT.MustFindProc("WD_Enable")
+		Disable    = GleamRT.MustFindProc("WD_Disable")
+		SetHandler = GleamRT.MustFindProc("WD_SetHandler")
+	)
+
+	handler := func() uintptr {
+		fmt.Println("================watchdog reset================")
+		return 0
+	}
+	_, _, _ = SetHandler.Call(syscall.NewCallback(handler))
+	ret, _, _ := Enable.Call()
+	if ret != noError {
+		log.Fatalf("failed to enable watchdog: 0x%X\n", ret)
+	}
+
+	go func() {
+		for i := 0; i < 1000000; i++ { // TODO 10
+			ret, _, _ = Kick.Call()
+			if ret != noError {
+				log.Fatalf("failed to kick watchdog: 0x%X\n", ret)
+			}
+			time.Sleep(time.Second)
+		}
+		ret, _, _ = Disable.Call()
+		if ret != noError {
+			log.Fatalf("failed to disable watchdog: 0x%X\n", ret)
+		}
+		ret, _, _ = Enable.Call()
+		if ret != noError {
+			log.Fatalf("failed to enable watchdog: 0x%X\n", ret)
+		}
+	}()
+}
+
 func testGetMetric() {
 	if GleamRT == nil {
 		return
@@ -283,9 +329,9 @@ func testGetMetric() {
 	go func() {
 		for {
 			metrics := gleamrt.Metrics{}
-			ret, _, err := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics)))
-			if ret != 0 {
-				log.Fatalln("failed to get runtime metrics:", err)
+			ret, _, _ := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics)))
+			if ret != noError {
+				log.Fatalf("failed to get runtime metrics: 0x%X\n", ret)
 			}
 			spew.Dump(metrics)
 			time.Sleep(3 * time.Second)
@@ -302,9 +348,9 @@ func kernel32Sleep() {
 			// trigger Gleam-RT SleepHR
 			fmt.Println("call kernel32.Sleep [hooked]")
 			now := time.Now()
-			errno, _, _ := procSleep.Call(1 + uintptr(rand.Intn(1000))) // #nosec
-			if errno != 0 {
-				log.Fatalf("occurred error when sleep: %X\n", errno)
+			ret, _, _ := procSleep.Call(1 + uintptr(rand.Intn(1000))) // #nosec
+			if ret != noError {
+				log.Fatalf("occurred error when sleep: 0x%X\n", ret)
 			}
 			counter++
 			fmt.Println("Sleep:", time.Since(now), "Times:", counter)
