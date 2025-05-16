@@ -285,25 +285,26 @@ func testWatchdog() {
 	if GleamRT == nil {
 		return
 	}
+
 	var (
-		Kick       = GleamRT.MustFindProc("WD_Kick")
-		Enable     = GleamRT.MustFindProc("WD_Enable")
-		Disable    = GleamRT.MustFindProc("WD_Disable")
-		SetHandler = GleamRT.MustFindProc("WD_SetHandler")
+		Kick      = GleamRT.MustFindProc("WD_Kick")
+		Enable    = GleamRT.MustFindProc("WD_Enable")
+		Disable   = GleamRT.MustFindProc("WD_Disable")
+		IsEnabled = GleamRT.MustFindProc("WD_IsEnabled")
 	)
 
-	handler := func() uintptr {
-		fmt.Println("================watchdog reset================")
-		return 0
-	}
-	_, _, _ = SetHandler.Call(syscall.NewCallback(handler))
-	ret, _, _ := Enable.Call()
-	if ret != noError {
-		log.Fatalf("failed to enable watchdog: 0x%X\n", ret)
+	ret, _, _ := IsEnabled.Call()
+	if ret == 1 {
+		fmt.Println("========watchdog is enabled========")
+	} else {
+		ret, _, _ = Enable.Call()
+		if ret != noError {
+			log.Fatalf("failed to enable watchdog: 0x%X\n", ret)
+		}
 	}
 
 	go func() {
-		for i := 0; i < 1000000; i++ { // TODO 10
+		for i := 0; i < 100; i++ {
 			ret, _, _ = Kick.Call()
 			if ret != noError {
 				log.Fatalf("failed to kick watchdog: 0x%X\n", ret)
@@ -325,6 +326,7 @@ func testGetMetric() {
 	if GleamRT == nil {
 		return
 	}
+
 	GetMetrics := GleamRT.MustFindProc("GetMetrics")
 	go func() {
 		for {
