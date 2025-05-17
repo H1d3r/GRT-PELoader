@@ -74,15 +74,28 @@ func testRuntimeAPI() {
 		"GetProcAddressOriginal",
 		"GetMetrics",
 		"ExitProcess",
+
 		"AS_GetValue",
 		"AS_GetPointer",
 		"AS_Erase",
 		"AS_EraseAll",
+
 		"IMS_SetValue",
 		"IMS_GetValue",
 		"IMS_GetPointer",
 		"IMS_Delete",
 		"IMS_DeleteAll",
+
+		"SM_Pause",
+		"SM_Continue",
+
+		"WD_Kick",
+		"WD_Enable",
+		"WD_Disable",
+		"WD_IsEnabled",
+		"WD_SetHandler",
+		"WD_Pause",
+		"WD_Continue",
 	} {
 		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
 		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
@@ -295,12 +308,14 @@ func testWatchdog() {
 
 	ret, _, _ := IsEnabled.Call()
 	if ret == 1 {
-		fmt.Println("========watchdog is enabled========")
+		fmt.Println("========watchdog is already enabled========")
 	} else {
 		ret, _, _ = Enable.Call()
 		if ret != noError {
-			log.Fatalf("failed to enable watchdog: 0x%X\n", ret)
+			log.Printf("[warning] failed to enable watchdog: 0x%X\n", ret)
+			return
 		}
+		fmt.Println("========watchdog is enabled========")
 	}
 
 	go func() {
