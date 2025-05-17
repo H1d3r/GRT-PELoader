@@ -158,6 +158,8 @@ static uint get_exit_code();
 static void set_running(bool run);
 static bool is_running();
 static void clean_run_data();
+static void reset_handler();
+static uint restart_image();
 
 // hooks about kernel32.dll
 LPSTR   hook_GetCommandLineA();
@@ -307,6 +309,8 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
         SetLastErrno(errno);
         return NULL;
     }
+    // set watchdog reset handler
+    runtime->Watchdog.SetHandler(GetFuncAddr(&reset_handler));
     // create methods for loader
     PELoader_M* module = (PELoader_M*)moduleAddr;
     // process variables
@@ -2449,6 +2453,38 @@ static void clean_run_data()
     // reset on exit callback
     loader->on_exit  = NULL;
     loader->num_exit = 0;
+}
+
+__declspec(noinline)
+static void reset_handler()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    void* addr = GetFuncAddr(&restart_image);
+    HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
+    if (hThread == NULL)
+    {
+        return;
+    }
+    loader->CloseHandle(hThread);
+}
+
+__declspec(noinline)
+static uint restart_image()
+{
+    dbg_log("[PE Loader]", "restart PE image");
+
+    errno errno = LDR_Exit(0);
+    if (errno != NO_ERROR)
+    {
+        dbg_log("[PE Loader]", "failed to exit PE image: 0x%X", errno);
+    }
+    errno = LDR_Execute();
+    if (errno != NO_ERROR)
+    {
+        dbg_log("[PE Loader]", "unexpected exit code: 0x%X", errno);
+    }
+    return 0;
 }
 
 __declspec(noinline)
