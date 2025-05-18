@@ -1915,6 +1915,11 @@ void hook_ExitProcess(UINT uExitCode)
     ldr_tls_callback(DLL_PROCESS_DETACH);
     ldr_free_tls_block();
 
+    if (uExitCode == 0)
+    {
+        runtime->Core.Exit();
+    }
+
     errno err = runtime->Core.Cleanup();
     if (err != NO_ERROR)
     {
@@ -2455,13 +2460,15 @@ static void clean_run_data()
     loader->num_exit = 0;
 }
 
+// TODO think not track
 __declspec(noinline)
 static void reset_handler()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     void* addr = GetFuncAddr(&restart_image);
-    HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
+    HANDLE hThread = runtime->Thread.New(addr, NULL, false);
     if (hThread == NULL)
     {
         return;
