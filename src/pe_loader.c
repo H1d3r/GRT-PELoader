@@ -45,7 +45,7 @@ typedef struct {
     // loader context
     void*  MainMemPage; // store all structures
     void*  PEBackup;    // PE image backup
-    bool   IsRunning;   // execute flag
+    bool   IsRunning;   // execution flag
     HANDLE hMutex;      // global mutex
     HANDLE StatusMu;    // lock loader status
 
@@ -112,7 +112,6 @@ static bool ldr_unlock();
 
 static void* allocPELoaderMemPage(PELoader_Cfg* config);
 static bool  initPELoaderAPI(PELoader* loader);
-static bool  lockMainMemPage(PELoader* loader);
 static bool  adjustPageProtect(PELoader* loader, DWORD* old);
 static bool  recoverPageProtect(PELoader* loader, DWORD protect);
 static bool  updatePELoaderPointer(PELoader* loader);
@@ -128,6 +127,7 @@ static void  prepareExportTable(PELoader* loader);
 static void  prepareImportTable(PELoader* loader);
 static void  prepareDelayImportTable(PELoader* loader);
 static bool  backupPEImage(PELoader* loader);
+static bool  lockMainMemPage(PELoader* loader);
 static bool  flushInstructionCache(PELoader* loader);
 static void  erasePELoaderMethods(PELoader* loader);
 static errno cleanPELoader(PELoader* loader);
@@ -256,11 +256,6 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
             errno = ERR_LOADER_INIT_API;
             break;
         }
-        if (!lockMainMemPage(loader))
-        {
-            errno = ERR_LOADER_LOCK_MAIN_MEM;
-            break;
-        }
         if (!adjustPageProtect(loader, &oldProtect))
         {
             errno = ERR_LOADER_ADJUST_PROTECT;
@@ -284,6 +279,11 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
         if (!backupPEImage(loader))
         {
             errno = ERR_LOADER_BACKUP_PE_IMAGE;
+            break;
+        }
+        if (!lockMainMemPage(loader))
+        {
+            errno = ERR_LOADER_LOCK_MAIN_MEM;
             break;
         }
         break;
@@ -323,7 +323,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->Execute = GetFuncAddr(&LDR_Execute);
     module->Exit    = GetFuncAddr(&LDR_Exit);
     module->Destroy = GetFuncAddr(&LDR_Destroy);
-    // record return value pointer;
+    // record return value pointer
     loader->ExitCode = &module->ExitCode;
     return module;
 }
@@ -428,17 +428,6 @@ static bool initPELoaderAPI(PELoader* loader)
     loader->GetCommandLineW       = list[0x0E].proc;
     loader->LocalFree             = list[0x0F].proc;
     loader->GetStdHandle          = list[0x10].proc;
-    return true;
-}
-
-static bool lockMainMemPage(PELoader* loader)
-{
-#ifndef NO_RUNTIME
-    if (!loader->Runtime->Memory.Lock(loader->MainMemPage))
-    {
-        return false;
-    }
-#endif // NO_RUNTIME
     return true;
 }
 
@@ -852,6 +841,17 @@ static bool backupPEImage(PELoader* loader)
 #ifndef NO_RUNTIME
     // lock memory region with special argument for reuse PE image
     if (!loader->Runtime->Memory.Lock(mem))
+    {
+        return false;
+    }
+#endif // NO_RUNTIME
+    return true;
+}
+
+static bool lockMainMemPage(PELoader* loader)
+{
+#ifndef NO_RUNTIME
+    if (!loader->Runtime->Memory.Lock(loader->MainMemPage))
     {
         return false;
     }
@@ -1914,11 +1914,6 @@ void hook_ExitProcess(UINT uExitCode)
     // execute TLS callback list befor call ExitThread.
     ldr_tls_callback(DLL_PROCESS_DETACH);
     ldr_free_tls_block();
-
-    if (uExitCode == 0)
-    {
-        runtime->Core.Exit();
-    }
 
     errno err = runtime->Core.Cleanup();
     if (err != NO_ERROR)
