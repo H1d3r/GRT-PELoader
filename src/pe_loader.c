@@ -2460,15 +2460,13 @@ static void clean_run_data()
     loader->num_exit = 0;
 }
 
-// TODO think not track
 __declspec(noinline)
 static void reset_handler()
 {
-    PELoader*  loader  = getPELoaderPointer();
-    Runtime_M* runtime = loader->Runtime;
+    PELoader* loader = getPELoaderPointer();
 
     void* addr = GetFuncAddr(&restart_image);
-    HANDLE hThread = runtime->Thread.New(addr, NULL, false);
+    HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
     if (hThread == NULL)
     {
         return;
@@ -2486,6 +2484,10 @@ static uint restart_image()
     {
         dbg_log("[PE Loader]", "failed to exit PE image: 0x%X", errno);
     }
+
+    // make sure the running data is clean
+    clean_run_data();
+
     errno = LDR_Execute();
     if (errno != NO_ERROR)
     {
