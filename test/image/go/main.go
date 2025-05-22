@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +23,15 @@ import (
 
 	"golang.org/x/sys/windows"
 )
+
+var (
+	numKick int
+)
+
+func init() {
+	flag.IntVar(&numKick, "kick", 100, "set the number of kick about watchdog")
+	flag.Parse()
+}
 
 const (
 	null    = 0
@@ -319,7 +329,7 @@ func testWatchdog() {
 	}
 
 	go func() {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < numKick; i++ {
 			ret, _, _ = Kick.Call()
 			if ret != noError {
 				log.Fatalf("failed to kick watchdog: 0x%X\n", ret)
