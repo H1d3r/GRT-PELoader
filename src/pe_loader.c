@@ -605,19 +605,13 @@ static bool mapSections(PELoader* loader)
     uint64 seed = (uint64)(GetFuncAddr(&InitPELoader));
     uint32 size = loader->ImageSize;
     size += (uint32)((1 + RandUintN(seed, 128)) * 4096);
-    // allocate memory for write PE image
-    void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+    // allocate memory for map PE image
+    void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (mem == NULL)
     {
         return false;
     }
     loader->PEImage = (uintptr)mem;
-    // adjust memory page for execute PE image
-    DWORD old;
-    if (!loader->VirtualProtect(mem, size, PAGE_EXECUTE_READWRITE, &old))
-    {
-        return false;
-    }
     // lock memory region with special argument for reuse PE image
 #ifndef NO_RUNTIME
     if (!loader->Runtime->Memory.Lock(mem))
@@ -2627,7 +2621,8 @@ errno LDR_Exit(uint exitCode)
 __declspec(noinline)
 errno LDR_Destroy()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     if (!ldr_lock())
     {
@@ -2661,6 +2656,12 @@ errno LDR_Destroy()
     if (errcl != NO_ERROR && err == NO_ERROR)
     {
         err = errcl;
+    }
+
+    errno errex = runtime->Core.Exit();
+    if (errex != NO_ERROR && err == NO_ERROR)
+    {
+        err = errex;
     }
     return err;
 }
