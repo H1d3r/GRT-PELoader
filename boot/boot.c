@@ -97,7 +97,8 @@ PELoader_M* Boot()
         err = eld;
     }
     SetLastErrno(err);
-    return 1;
+    // invalid pointer for test
+    return (PELoader_M*)(1);
 }
 
 __declspec(noinline)
