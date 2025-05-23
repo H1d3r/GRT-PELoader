@@ -61,14 +61,15 @@ typedef struct {
     GetProc_t GetProc;
 
     // create a thread at EntryPoint or call DllMain with DLL_PROCESS_ATTACH.
-    // it can call multi times.
+    // it can call multi times with Exit.
     Execute_t Execute;
 
     // release all resource or call DllMain with DLL_PROCESS_DETACH.
-    // it can call multi times.
+    // it can call multi times with Execute.
     Exit_t Exit;
 
-    // destroy all resource about PE loader, it can only call one time.
+    // destroy all resource about PE loader, it can only call once.
+    // it will exit runtime, but caller need erase the remaining instruction.
     Destroy_t Destroy;
 } PELoader_M;
 
