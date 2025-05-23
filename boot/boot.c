@@ -90,19 +90,14 @@ PELoader_M* Boot()
         SetLastErrno(err);
         return loader;
     }
-    // destroy pe loader and exit runtime
+    // destroy pe loader
     errno eld = loader->Destroy();
     if (eld != NO_ERROR && err == NO_ERROR)
     {
         err = eld;
     }
-    errno ere = runtime->Core.Exit();
-    if (ere != NO_ERROR && err == NO_ERROR)
-    {
-        err = ere;
-    }
     SetLastErrno(err);
-    return loader;
+    return 1;
 }
 
 __declspec(noinline)
