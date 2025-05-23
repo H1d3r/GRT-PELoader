@@ -71,7 +71,10 @@ bool TestInitPELoader()
 
     LPSTR  cmdLineA = NULL;
     LPWSTR cmdLineW = NULL;
-    // cmdLineA = "loader.exe -p1 123 -p2 \"test\"";
+
+    // cmdLineA =  "loader.exe -kick 10";
+    // cmdLineW = L"loader.exe -kick 10";
+    // cmdLineA =  "loader.exe -p1 123 -p2 \"test\"";
     // cmdLineW = L"loader.exe -p1 123 -p2 \"test\"";
 
     PELoader_Cfg cfg = {
@@ -239,13 +242,6 @@ bool TestPELoader_Destroy()
     if (errno != NO_ERROR)
     {
         printf_s("failed to destroy PE loader: 0x%X\n", errno);
-        return false;
-    }
-
-    errno = runtime->Core.Exit();
-    if (errno != NO_ERROR)
-    {
-        printf_s("failed to exit runtime: 0x%X\n", errno);
         return false;
     }
 
