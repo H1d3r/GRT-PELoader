@@ -1919,6 +1919,17 @@ void hook_ExitProcess(UINT uExitCode)
     set_exit_code(uExitCode);
     set_running(false);
 
+    if (loader->Config.WaitMain)
+    {
+        loader->ExitThread(0);
+        return;
+    }
+
+    if (!runtime->Watchdog.IsEnabled() || uExitCode == 0)
+    {
+        runtime->Core.Stop();
+        return;
+    }
     loader->ExitThread(0);
 }
 
