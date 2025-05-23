@@ -26,10 +26,16 @@ import (
 
 var (
 	numKick int
+
+	// ignored argument for test
+	p1 int
+	p2 string
 )
 
 func init() {
 	flag.IntVar(&numKick, "kick", 100, "set the number of kick about watchdog")
+	flag.IntVar(&p1, "p1", 0, "ignored argument for test")
+	flag.StringVar(&p2, "p2", "", "ignored argument for test")
 	flag.Parse()
 }
 
