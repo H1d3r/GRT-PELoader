@@ -131,8 +131,5 @@ func TestTrimmedPELoader(t *testing.T) {
 
 		err = PELoaderM.Destroy()
 		require.NoError(t, err)
-
-		err = RuntimeM.Exit()
-		require.NoError(t, err)
 	})
 }
