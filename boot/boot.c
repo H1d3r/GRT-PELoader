@@ -85,7 +85,7 @@ PELoader_M* Boot()
 
     // execute PE image
     err = loader->Execute();
-    if (!config.WaitMain)
+    if (!config.WaitMain || loader->IsDLL)
     {
         SetLastErrno(err);
         return loader;
