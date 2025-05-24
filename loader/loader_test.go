@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
@@ -30,6 +31,75 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TestPELoader(t *testing.T) {
+	t.Run("exe", func(t *testing.T) {
+		image := NewFile("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+		opts := &Options{
+			ImageName:   "powershell.exe",
+			CommandLine: "-mta",
+			WaitMain:    false,
+		}
+		var (
+			inst []byte
+			err  error
+		)
+		switch runtime.GOARCH {
+		case "386":
+			inst, err = CreateInstance(testLDRx86, 32, image, opts)
+		case "amd64":
+			inst, err = CreateInstance(testLDRx64, 64, image, opts)
+		default:
+			t.Fatal("unsupported architecture")
+		}
+		require.NoError(t, err)
+
+		addr := loadShellcode(t, inst)
+		ret, _, _ := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ret)
+
+		time.Sleep(3 * time.Second)
+
+		fmt.Println("\nfinish")
+	})
+
+	t.Run("dll", func(t *testing.T) {
+		image := NewFile("C:\\Windows\\System32\\ws2_32.dll")
+		opts := &Options{
+			WaitMain:     false,
+			AllowSkipDLL: true,
+		}
+		var (
+			inst []byte
+			err  error
+		)
+		switch runtime.GOARCH {
+		case "386":
+			inst, err = CreateInstance(testLDRx86, 32, image, opts)
+		case "amd64":
+			inst, err = CreateInstance(testLDRx64, 64, image, opts)
+		default:
+			t.Fatal("unsupported architecture")
+		}
+		require.NoError(t, err)
+
+		addr := loadShellcode(t, inst)
+		ret, _, _ := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ret)
+		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
+
+		connect, err := PELoaderM.GetProcAddress("connect")
+		require.NoError(t, err)
+		fmt.Printf("ws2_32.connect: 0x%X\n", connect)
+
+		// call DllMain DLL_PROCESS_DETACH
+		err = PELoaderM.Exit(0)
+		require.NoError(t, err)
+
+		err = PELoaderM.Destroy()
+		require.NoError(t, err)
+	})
 }
 
 func TestTrimmedPELoader(t *testing.T) {
