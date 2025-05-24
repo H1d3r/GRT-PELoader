@@ -2576,12 +2576,11 @@ errno LDR_Execute()
             set_running(true);
             break;
         }
-        // change the running status
+        // change the running status before create thread
         set_running(true);
         // create thread at entry point
-        // TODO no new thread
-        void* addr = GetFuncAddr(&pe_entry_point);
-        hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
+        void* ep = GetFuncAddr(&pe_entry_point);
+        hThread = loader->CreateThread(NULL, 0, ep, NULL, 0, NULL);
         if (hThread == NULL)
         {
             errno = ERR_LOADER_CREATE_MAIN_THREAD;
