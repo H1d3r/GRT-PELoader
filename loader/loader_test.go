@@ -3,16 +3,17 @@
 package loader
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,16 +36,34 @@ func init() {
 
 func TestPELoader(t *testing.T) {
 	t.Run("exe", func(t *testing.T) {
-		image := NewFile("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
-		opts := &Options{
-			ImageName:   "powershell.exe",
-			CommandLine: "-mta",
-			WaitMain:    false,
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/rust_msvc.exe")
+		default:
+			t.Fatal("unsupported architecture")
 		}
-		var (
-			inst []byte
-			err  error
-		)
+
+		r, w, err := os.Pipe()
+		opts := &Options{
+			ImageName: "test.exe",
+			WaitMain:  false,
+
+			StdInput:  0,
+			StdOutput: uint64(w.Fd()),
+			StdError:  uint64(w.Fd()),
+		}
+
+		go func() {
+			reader := bufio.NewScanner(r)
+			for reader.Scan() {
+				fmt.Println(reader.Text())
+			}
+		}()
+
+		var inst []byte
 		switch runtime.GOARCH {
 		case "386":
 			inst, err = CreateInstance(testLDRx86, 32, image, opts)
@@ -58,10 +77,8 @@ func TestPELoader(t *testing.T) {
 		addr := loadShellcode(t, inst)
 		ret, _, _ := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ret)
-
-		time.Sleep(3 * time.Second)
-
-		fmt.Println("\nfinish")
+		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
+		spew.Dump(PELoaderM)
 	})
 
 	t.Run("dll", func(t *testing.T) {
@@ -88,6 +105,7 @@ func TestPELoader(t *testing.T) {
 		ret, _, _ := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ret)
 		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
+		spew.Dump(PELoaderM)
 
 		connect, err := PELoaderM.GetProcAddress("connect")
 		require.NoError(t, err)
