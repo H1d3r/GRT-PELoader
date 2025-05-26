@@ -55,6 +55,7 @@ bool TestInitPELoader()
 #endif
     // file = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\PowerShell.exe";
     // file = "C:\\Windows\\System32\\cmd.exe";
+    // file = "C:\\Windows\\System32\\calc.exe";
     // file = "C:\\Windows\\System32\\mscoree.dll";
     // file = "C:\\Windows\\System32\\ole32.dll";
     // file = "C:\\Windows\\System32\\oleaut32.dll";
@@ -89,6 +90,7 @@ bool TestInitPELoader()
         .CommandLineW = cmdLineW,
         .WaitMain     = true,
         .AllowSkipDLL = true,
+        .IgnoreStdIO  = false,
         .StdInput     = NULL,
         .StdOutput    = NULL,
         .StdError     = NULL,
