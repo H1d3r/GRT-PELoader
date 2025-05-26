@@ -18,6 +18,7 @@ hash_api -fmt 64 -conc -func FlushInstructionCache
 hash_api -fmt 64 -conc -func CreateMutexA
 hash_api -fmt 64 -conc -func ReleaseMutex
 hash_api -fmt 64 -conc -func WaitForSingleObject
+hash_api -fmt 64 -conc -func CreateFileA
 hash_api -fmt 64 -conc -func CloseHandle
 hash_api -fmt 64 -conc -func GetCommandLineA
 hash_api -fmt 64 -conc -func GetCommandLineW
@@ -83,6 +84,7 @@ hash_api -fmt 32 -conc -func FlushInstructionCache
 hash_api -fmt 32 -conc -func CreateMutexA
 hash_api -fmt 32 -conc -func ReleaseMutex
 hash_api -fmt 32 -conc -func WaitForSingleObject
+hash_api -fmt 32 -conc -func CreateFileA
 hash_api -fmt 32 -conc -func CloseHandle
 hash_api -fmt 32 -conc -func GetCommandLineA
 hash_api -fmt 32 -conc -func GetCommandLineW
