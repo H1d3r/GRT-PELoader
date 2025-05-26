@@ -36,6 +36,7 @@ typedef struct {
     CreateMutexA_t          CreateMutexA;
     ReleaseMutex_t          ReleaseMutex;
     WaitForSingleObject_t   WaitForSingleObject;
+    CreateFileA_t           CreateFileA;
     CloseHandle_t           CloseHandle;
     GetCommandLineA_t       GetCommandLineA;
     GetCommandLineW_t       GetCommandLineW;
@@ -43,11 +44,14 @@ typedef struct {
     GetStdHandle_t          GetStdHandle;
 
     // loader context
-    void*  MainMemPage; // store all structures
-    void*  PEBackup;    // PE image backup
-    bool   IsRunning;   // execution flag
-    HANDLE hMutex;      // global mutex
-    HANDLE StatusMu;    // lock loader status
+    void* MainMemPage; // store all structures
+    void* PEBackup;    // PE image backup
+    bool  IsRunning;   // execution flag
+
+    // loader resource
+    HANDLE hMutex;   // global mutex
+    HANDLE hFileNUL; // for ignore console
+    HANDLE StatusMu; // lock loader status
 
     // store PE image information
     uintptr PEImage;
@@ -374,6 +378,7 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0x04A85D44E64689B3, 0xBB2834EF8BE725C9 }, // CreateMutexA
         { 0x5B84A4B6173E4B44, 0x089FC914B21A66DA }, // ReleaseMutex
         { 0x91BB0A2A34E70890, 0xB2307F73C72A83BD }, // WaitForSingleObject
+        { 0xC4EEF38337C71478, 0x7A1AD68718F1383E }, // CreateFileA
         { 0xB23064DF64282DE1, 0xD62F5C65075FCCE8 }, // CloseHandle
         { 0xEF31896F2FACEC04, 0x0E670990125E8E48 }, // GetCommandLineA
         { 0x701EF754FFADBDC2, 0x6D5BE783B0AF5812 }, // GetCommandLineW
@@ -394,6 +399,7 @@ static bool initPELoaderAPI(PELoader* loader)
         { 0xFF3A4BBB, 0xD2F55A75 }, // CreateMutexA
         { 0x30B41C8C, 0xDD13B99D }, // ReleaseMutex
         { 0x4DF94300, 0x85D5CD6F }, // WaitForSingleObject
+        { 0xE8F53C85, 0xDCC5C6B9 }, // CreateFileA
         { 0x7DC545BC, 0xCBD67153 }, // CloseHandle
         { 0xA187476E, 0x5AF922F3 }, // GetCommandLineA
         { 0xC15EF07A, 0x47A945CE }, // GetCommandLineW
@@ -423,11 +429,12 @@ static bool initPELoaderAPI(PELoader* loader)
     loader->CreateMutexA          = list[0x09].proc;
     loader->ReleaseMutex          = list[0x0A].proc;
     loader->WaitForSingleObject   = list[0x0B].proc;
-    loader->CloseHandle           = list[0x0C].proc;
-    loader->GetCommandLineA       = list[0x0D].proc;
-    loader->GetCommandLineW       = list[0x0E].proc;
-    loader->LocalFree             = list[0x0F].proc;
-    loader->GetStdHandle          = list[0x10].proc;
+    loader->CreateFileA           = list[0x0C].proc;
+    loader->CloseHandle           = list[0x0D].proc;
+    loader->GetCommandLineA       = list[0x0E].proc;
+    loader->GetCommandLineW       = list[0x0F].proc;
+    loader->LocalFree             = list[0x10].proc;
+    loader->GetStdHandle          = list[0x11].proc;
     return true;
 }
 
@@ -487,9 +494,38 @@ static errno initPELoaderEnvironment(PELoader* loader)
     if (!loader->Runtime->Resource.LockMutex(hMutex))
     {
         loader->CloseHandle(hMutex);
+        loader->hMutex = NULL;
         return ERR_LOADER_LOCK_G_MUTEX;
     }
 #endif // NO_RUNTIME
+
+    // create NUL file if ignore standard handle
+    if (loader->Config.IgnoreStdIO)
+    {
+        byte nul[] = { 'N', 'U', 'L', '\x00' };
+        HANDLE hFileNUL = loader->CreateFileA(
+            nul, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, 
+            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+        );   
+        if (hFileNUL == INVALID_HANDLE_VALUE)
+        {
+            return ERR_LOADER_CREATE_NUL_FILE;
+        } 
+        loader->hFileNUL = hFileNUL;
+        // overwrite handle in config
+        loader->Config.StdInput  = hFileNUL;
+        loader->Config.StdOutput = hFileNUL;
+        loader->Config.StdError  = hFileNUL;
+        // lock file
+    #ifndef NO_RUNTIME
+        if (!loader->Runtime->Resource.LockFile(hFileNUL))
+        {
+            loader->CloseHandle(hFileNUL);
+            loader->hFileNUL = NULL;
+            return ERR_LOADER_LOCK_NUL_FILE;
+        }
+    #endif // NO_RUNTIME
+    }
     return NO_ERROR;
 }
 
@@ -921,6 +957,14 @@ static errno cleanPELoader(PELoader* loader)
                 errno = ERR_LOADER_CLEAN_G_MUTEX;
             }
         }
+        // close NUL file
+        if (loader->hFileNUL != NULL)
+        {
+            if (!closeHandle(loader->hFileNUL) && errno == NO_ERROR)
+            {
+                errno = ERR_LOADER_CLEAN_NUL_FILE;
+            }
+        }
         // close status mutex
         if (loader->StatusMu != NULL)
         {
@@ -1178,6 +1222,7 @@ static errno ldr_init_mutex()
     if (!loader->Runtime->Resource.LockMutex(statusMu))
     {
         loader->CloseHandle(statusMu);
+        loader->StatusMu = NULL;
         return ERR_LOADER_LOCK_S_MUTEX;
     }
 #endif // NO_RUNTIME
