@@ -46,6 +46,7 @@ PELoader_M* Boot()
         .CommandLineW = NULL,
         .WaitMain     = false,
         .AllowSkipDLL = false,
+        .IgnoreStdIO  = false,
         .StdInput     = NULL,
         .StdOutput    = NULL,
         .StdError     = NULL,
@@ -112,9 +113,9 @@ static errno loadOption(Runtime_Opts* options)
         return ERR_INVALID_OPTION_STUB;
     }
     // load runtime options from stub
-    options->NotEraseInstruction = *(bool*)(stub+OPT_OFFSET_NOT_ERASE_INSTRUCTION);
-    options->NotAdjustProtect    = *(bool*)(stub+OPT_OFFSET_NOT_ADJUST_PROTECT);
-    options->TrackCurrentThread  = *(bool*)(stub+OPT_OFFSET_NOT_TRACK_CURRENT_THREAD);
+    options->NotEraseInstruction = *(bool*)(stub + OPT_OFFSET_NOT_ERASE_INSTRUCTION);
+    options->NotAdjustProtect    = *(bool*)(stub + OPT_OFFSET_NOT_ADJUST_PROTECT);
+    options->TrackCurrentThread  = *(bool*)(stub + OPT_OFFSET_NOT_TRACK_CURRENT_THREAD);
     return NO_ERROR;
 }
 
@@ -164,6 +165,15 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     if (size != sizeof(bool))
     {
         return ERR_INVALID_ALLOW_SKIP_DLL;
+    }
+    // load IgnoreStdIO, it must be true of false
+    if (!runtime->Argument.GetValue(ARG_ID_IGNORE_STD_IO, &config->IgnoreStdIO, &size))
+    {
+        return ERR_NOT_FOUND_IGNORE_STD_IO;
+    }
+    if (size != sizeof(bool))
+    {
+        return ERR_INVALID_IGNORE_STD_IO;
     }
     // load STD_INPUT_HANDLE, it can be zero
     if (!runtime->Argument.GetValue(ARG_ID_STD_INPUT, &config->StdInput, &size))
@@ -304,6 +314,7 @@ static errno eraseArguments(Runtime_M* runtime)
         ARG_ID_PE_IMAGE,
         ARG_ID_WAIT_MAIN,
         ARG_ID_ALLOW_SKIP_DLL,
+        ARG_ID_IGNORE_STD_IO,
         ARG_ID_STD_INPUT,
         ARG_ID_STD_OUTPUT,
         ARG_ID_STD_ERROR,
