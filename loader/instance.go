@@ -40,6 +40,11 @@ type Options struct {
 	// if failed to load library, can continue it.
 	AllowSkipDLL bool
 
+	// create NUL file for set StdInput, StdOutput and
+	// StdError for ignore console input/output.
+	// If it is true, it will overwrite standard handles.
+	IgnoreStdIO bool
+
 	// set standard handles for hook GetStdHandle,
 	// if them are NULL, call original GetStdHandle.
 	StdInput  uint64
@@ -89,6 +94,11 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 	if opts.AllowSkipDLL {
 		allowSkipDLL[0] = 1
 	}
+	// process IgnoreStdIO
+	ignoreStdIO := make([]byte, 1)
+	if opts.IgnoreStdIO {
+		ignoreStdIO[0] = 1
+	}
 	// process standard handle
 	stdInput := binary.LittleEndian.AppendUint64(nil, opts.StdInput)
 	stdOutput := binary.LittleEndian.AppendUint64(nil, opts.StdOutput)
@@ -112,9 +122,10 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		{ID: 3, Data: cmdLineW},
 		{ID: 4, Data: waitMain},
 		{ID: 5, Data: allowSkipDLL},
-		{ID: 6, Data: stdInput},
-		{ID: 7, Data: stdOutput},
-		{ID: 8, Data: stdError},
+		{ID: 6, Data: ignoreStdIO},
+		{ID: 7, Data: stdInput},
+		{ID: 8, Data: stdOutput},
+		{ID: 9, Data: stdError},
 	}
 	stub, err := argument.Encode(args...)
 	if err != nil {
