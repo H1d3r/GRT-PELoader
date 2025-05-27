@@ -38,6 +38,7 @@ func init() {
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
+	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
 	flag.StringVar(&outPath, "o", "output.bin", "set output shellcode file path")
 	option.Flag(&options.Runtime)
 	flag.Parse()
