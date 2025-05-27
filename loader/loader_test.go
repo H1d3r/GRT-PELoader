@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
@@ -47,6 +48,7 @@ func TestPELoader(t *testing.T) {
 		}
 
 		r, w, err := os.Pipe()
+		require.NoError(t, err)
 		opts := &Options{
 			ImageName: "test.exe",
 			WaitMain:  false,
@@ -79,6 +81,47 @@ func TestPELoader(t *testing.T) {
 		require.NotEqual(t, uintptr(0), ret)
 		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
 		spew.Dump(PELoaderM)
+
+		time.Sleep(3 * time.Second)
+	})
+
+	t.Run("ignore output", func(t *testing.T) {
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/rust_msvc.exe")
+		default:
+			t.Fatal("unsupported architecture")
+		}
+
+		opts := &Options{
+			ImageName:   "test.exe",
+			WaitMain:    true,
+			IgnoreStdIO: true,
+
+			StdInput:  1, // will be overwritten
+			StdOutput: 2, // will be overwritten
+			StdError:  3, // will be overwritten
+		}
+		var (
+			inst []byte
+			err  error
+		)
+		switch runtime.GOARCH {
+		case "386":
+			inst, err = CreateInstance(testLDRx86, 32, image, opts)
+		case "amd64":
+			inst, err = CreateInstance(testLDRx64, 64, image, opts)
+		default:
+			t.Fatal("unsupported architecture")
+		}
+		require.NoError(t, err)
+
+		addr := loadShellcode(t, inst)
+		ret, _, _ := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ret)
 	})
 
 	t.Run("dll", func(t *testing.T) {
@@ -168,6 +211,46 @@ func TestTrimmedPELoader(t *testing.T) {
 			FindAPI:  RuntimeM.HashAPI.FindAPI,
 			Image:    (uintptr)(unsafe.Pointer(&pe[0])),
 			WaitMain: true,
+		}
+
+		// initialize PELoader
+		addr = loadShellcode(t, ldr)
+		fmt.Printf("PE Loader: 0x%X\n", addr)
+		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
+		require.NoError(t, err)
+
+		err = PELoaderM.Execute()
+		require.NoError(t, err)
+
+		err = RuntimeM.Exit()
+		require.NoError(t, err)
+	})
+
+	t.Run("ignore output", func(t *testing.T) {
+		// initialize Gleam-RT
+		addr := loadShellcode(t, rt)
+		fmt.Printf("Runtime:   0x%X\n", addr)
+		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
+		require.NoError(t, err)
+
+		// read pe data
+		var pe []byte
+		switch runtime.GOARCH {
+		case "386":
+			pe, err = os.ReadFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			pe, err = os.ReadFile("../test/image/x64/rust_msvc.exe")
+		}
+		require.NoError(t, err)
+		config := Config{
+			FindAPI:     RuntimeM.HashAPI.FindAPI,
+			Image:       (uintptr)(unsafe.Pointer(&pe[0])),
+			WaitMain:    true,
+			IgnoreStdIO: true,
+
+			StdInput:  1, // will be overwritten
+			StdOutput: 2, // will be overwritten
+			StdError:  3, // will be overwritten
 		}
 
 		// initialize PELoader
