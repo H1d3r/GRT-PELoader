@@ -50,6 +50,7 @@ var (
 	procSleep              = modKernel32.NewProc("Sleep")
 )
 
+// GleamRT is a virtual dll for get runtime methods.
 var GleamRT *windows.DLL
 
 func init() {
@@ -362,7 +363,7 @@ func testGetMetric() {
 	go func() {
 		for {
 			metrics := gleamrt.Metrics{}
-			ret, _, _ := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics)))
+			ret, _, _ := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics))) // #nosec
 			if ret != noError {
 				log.Fatalf("failed to get runtime metrics: 0x%X\n", ret)
 			}
