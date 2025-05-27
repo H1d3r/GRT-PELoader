@@ -43,6 +43,11 @@ type Config struct {
 	// if failed to load library, can continue it.
 	AllowSkipDLL bool
 
+	// create NUL file for set StdInput, StdOutput and
+	// StdError for ignore console input/output.
+	// If it is true, it will overwrite standard handles.
+	IgnoreStdIO bool
+
 	// set standard handles for hook GetStdHandle,
 	// if them are NULL, call original GetStdHandle.
 	StdInput  uintptr
