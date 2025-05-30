@@ -486,7 +486,7 @@ static errno initPELoaderEnvironment(PELoader* loader)
     HANDLE hMutex = loader->CreateMutexA(NULL, false, NAME_LDR_MUTEX_GLOBAL);
     if (hMutex == NULL)
     {
-        return ERR_LOADER_CREATE_G_MUTEX;
+        return ERR_LOADER_CREATE_MUTEX_GLOBAL;
     }
     loader->hMutex = hMutex;
     // lock mutex
@@ -495,7 +495,7 @@ static errno initPELoaderEnvironment(PELoader* loader)
     {
         loader->CloseHandle(hMutex);
         loader->hMutex = NULL;
-        return ERR_LOADER_LOCK_G_MUTEX;
+        return ERR_LOADER_LOCK_MUTEX_GLOBAL;
     }
 #endif // NO_RUNTIME
 
@@ -509,7 +509,7 @@ static errno initPELoaderEnvironment(PELoader* loader)
         );   
         if (hFileNUL == INVALID_HANDLE_VALUE)
         {
-            return ERR_LOADER_CREATE_NUL_FILE;
+            return ERR_LOADER_CREATE_FILE_NUL;
         } 
         loader->hFileNUL = hFileNUL;
         // overwrite handle in config
@@ -522,7 +522,7 @@ static errno initPELoaderEnvironment(PELoader* loader)
         {
             loader->CloseHandle(hFileNUL);
             loader->hFileNUL = NULL;
-            return ERR_LOADER_LOCK_NUL_FILE;
+            return ERR_LOADER_LOCK_FILE_NUL;
         }
     #endif // NO_RUNTIME
     }
@@ -954,7 +954,7 @@ static errno cleanPELoader(PELoader* loader)
         {
             if (!closeHandle(loader->hMutex) && errno == NO_ERROR)
             {
-                errno = ERR_LOADER_CLEAN_G_MUTEX;
+                errno = ERR_LOADER_CLEAN_MUTEX_GLOBAL;
             }
         }
         // close NUL file
@@ -962,7 +962,7 @@ static errno cleanPELoader(PELoader* loader)
         {
             if (!closeHandle(loader->hFileNUL) && errno == NO_ERROR)
             {
-                errno = ERR_LOADER_CLEAN_NUL_FILE;
+                errno = ERR_LOADER_CLEAN_FILE_NUL;
             }
         }
         // close status mutex
@@ -970,7 +970,7 @@ static errno cleanPELoader(PELoader* loader)
         {
             if (!closeHandle(loader->StatusMu) && errno == NO_ERROR)
             {
-                errno = ERR_LOADER_CLEAN_S_MUTEX;
+                errno = ERR_LOADER_CLEAN_MUTEX_STATUS;
             }
         }
     }
@@ -997,7 +997,7 @@ static errno cleanPELoader(PELoader* loader)
             RandBuffer(peBackup, loader->ImageSize);
             if (!virtualFree(peBackup, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
-                errno = ERR_LOADER_FREE_BACKUP;
+                errno = ERR_LOADER_FREE_PE_IMAGE_BACKUP;
             }
         }
         // release memory page for TLS block template
@@ -1214,7 +1214,7 @@ static errno ldr_init_mutex()
     HANDLE statusMu = loader->CreateMutexA(NULL, false, NAME_LDR_MUTEX_STATUS);
     if (statusMu == NULL)
     {
-        return ERR_LOADER_CREATE_S_MUTEX;
+        return ERR_LOADER_CREATE_MUTEX_STATUS;
     }
     loader->StatusMu = statusMu;
     // lock mutex
@@ -1223,7 +1223,7 @@ static errno ldr_init_mutex()
     {
         loader->CloseHandle(statusMu);
         loader->StatusMu = NULL;
-        return ERR_LOADER_LOCK_S_MUTEX;
+        return ERR_LOADER_LOCK_MUTEX_STATUS;
     }
 #endif // NO_RUNTIME
     return NO_ERROR;
