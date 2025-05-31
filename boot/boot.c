@@ -21,6 +21,8 @@ PELoader_M* Boot()
     // initialize Gleam-RT for PE Loader
     Runtime_Opts options = {
         .BootInstAddress     = GetFuncAddr(&Boot),
+        .DisableSysmon       = false,
+        .DisableWatchdog     = false,
         .NotEraseInstruction = false,
         .NotAdjustProtect    = false,
         .TrackCurrentThread  = false,
@@ -113,9 +115,11 @@ static errno loadOption(Runtime_Opts* options)
         return ERR_INVALID_OPTION_STUB;
     }
     // load runtime options from stub
+    options->DisableSysmon       = *(bool*)(stub + OPT_OFFSET_DISABLE_SYSMON);
+    options->DisableWatchdog     = *(bool*)(stub + OPT_OFFSET_DISABLE_WATCHDOG);
     options->NotEraseInstruction = *(bool*)(stub + OPT_OFFSET_NOT_ERASE_INSTRUCTION);
     options->NotAdjustProtect    = *(bool*)(stub + OPT_OFFSET_NOT_ADJUST_PROTECT);
-    options->TrackCurrentThread  = *(bool*)(stub + OPT_OFFSET_NOT_TRACK_CURRENT_THREAD);
+    options->TrackCurrentThread  = *(bool*)(stub + OPT_OFFSET_TRACK_CURRENT_THREAD);
     return NO_ERROR;
 }
 
