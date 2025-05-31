@@ -88,6 +88,11 @@ type PELoaderM struct {
 	destroy uintptr
 }
 
+// NewPELoader is used to create PELoader from initialized instance.
+func NewPELoader(ptr uintptr) *PELoaderM {
+	return (*PELoaderM)(unsafe.Pointer(ptr)) // #nosec
+}
+
 // InitPELoader is used to initialize PE Loader from shellcode instance.
 // Each shellcode instance can only initialize once.
 func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PELoaderM, error) {
@@ -97,7 +102,7 @@ func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PEL
 	if ptr == null {
 		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", err)
 	}
-	return (*PELoaderM)(unsafe.Pointer(ptr)), nil // #nosec
+	return NewPELoader(ptr), nil
 }
 
 // GetProcAddress is used to get procedure address by name.
