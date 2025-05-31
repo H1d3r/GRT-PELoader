@@ -18,7 +18,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
+	"github.com/RSSU-Shellcode/GRT-Develop/metric"
 	"github.com/davecgh/go-spew/spew"
 
 	"golang.org/x/sys/windows"
@@ -362,7 +362,7 @@ func testGetMetric() {
 	GetMetrics := GleamRT.MustFindProc("GetMetrics")
 	go func() {
 		for {
-			metrics := gleamrt.Metrics{}
+			metrics := metric.Metrics{}
 			ret, _, _ := GetMetrics.Call(uintptr(unsafe.Pointer(&metrics))) // #nosec
 			if ret != noError {
 				log.Fatalf("failed to get runtime metrics: 0x%X\n", ret)
