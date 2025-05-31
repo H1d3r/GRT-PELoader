@@ -13,9 +13,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
+
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
 )
 
 var (
