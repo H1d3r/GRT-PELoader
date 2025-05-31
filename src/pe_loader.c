@@ -322,6 +322,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->EntryPoint = (void*)(loader->EntryPoint);
     module->IsDLL      = loader->IsDLL;
     module->ExitCode   = 0;
+    module->RuntimeMu  = runtime->Data.Mutex;
     // loader module methods
     module->GetProc = GetFuncAddr(&LDR_GetProc);
     module->Execute = GetFuncAddr(&LDR_Execute);
