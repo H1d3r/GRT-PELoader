@@ -62,6 +62,9 @@ typedef struct {
     // main thread return value or argument about call ExitProcess.
     uint ExitCode;
 
+    // runtime mutex, need lock it before call some loader methods.
+    HANDLE RuntimeMu;
+
     // get export procedure address by name, must call Execute before call it.
     GetProc_t GetProc;
 
