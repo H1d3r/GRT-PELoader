@@ -78,9 +78,9 @@ func TestPELoader(t *testing.T) {
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
-		ret, _, _ := syscallN(addr)
-		require.NotEqual(t, uintptr(0), ret)
-		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
+		ptr, _, err := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ptr, err)
+		PELoaderM := NewPELoader(ptr)
 		spew.Dump(PELoaderM)
 
 		time.Sleep(3 * time.Second)
@@ -121,8 +121,8 @@ func TestPELoader(t *testing.T) {
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
-		ret, _, _ := syscallN(addr)
-		require.NotEqual(t, uintptr(0), ret)
+		ret, _, err := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ret, err)
 	})
 
 	t.Run("dll", func(t *testing.T) {
@@ -146,9 +146,9 @@ func TestPELoader(t *testing.T) {
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
-		ret, _, _ := syscallN(addr)
-		require.NotEqual(t, uintptr(0), ret)
-		PELoaderM := (*PELoaderM)(unsafe.Pointer(ret))
+		ptr, _, err := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ptr, err)
+		PELoaderM := NewPELoader(ptr)
 		spew.Dump(PELoaderM)
 
 		connect, err := PELoaderM.GetProcAddress("connect")
