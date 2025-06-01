@@ -608,21 +608,21 @@ static bool parsePEImage(PELoader* loader)
     loader->Section    = section;
     loader->FileHeader = *fileHeader;
     loader->OptHeader  = *optHeader;
-    loader->IsDLL   = characteristics & IMAGE_FILE_DLL;
-    loader->IsFixed = characteristics & IMAGE_FILE_RELOCS_STRIPPED;
+    loader->IsDLL      = characteristics & IMAGE_FILE_DLL;
+    loader->IsFixed    = characteristics & IMAGE_FILE_RELOCS_STRIPPED;
     return true;
 }
 
 static bool checkPEImage(PELoader* loader)
 {
-    Image_FileHeader* FileHeader = &loader->FileHeader;
     // check PE image architecture
 #ifdef _WIN64
     uint16 arch = IMAGE_FILE_MACHINE_AMD64;
 #elif _WIN32
     uint16 arch = IMAGE_FILE_MACHINE_I386;
 #endif
-    if (arch != FileHeader->Machine)
+    Image_FileHeader* FileHeader = &loader->FileHeader;
+    if (FileHeader->Machine != arch)
     {
         return false;
     }
