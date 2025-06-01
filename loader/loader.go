@@ -4,6 +4,7 @@ package loader
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -71,7 +72,7 @@ type PELoaderM struct {
 	// absolute memory address about PE entry point.
 	EntryPoint uintptr
 
-	// this PE image is a DLL.
+	// is this PE image is a DLL image.
 	IsDLL bool
 
 	// main thread return value or argument about call ExitProcess.
@@ -112,8 +113,28 @@ func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PEL
 	return &loader, nil
 }
 
+func (ldr *PELoaderM) lock() {
+	runtime.LockOSThread()
+	hMutex := windows.Handle(ldr.runtimeMu)
+	_, err := windows.WaitForSingleObject(hMutex, windows.INFINITE)
+	if err != nil {
+		panic(fmt.Sprintf("failed to lock runtime mutex: %s", err))
+	}
+}
+
+func (ldr *PELoaderM) unlock() {
+	hMutex := windows.Handle(ldr.runtimeMu)
+	err := windows.ReleaseMutex(hMutex)
+	if err != nil {
+		panic(fmt.Sprintf("failed to release runtime mutex: %s", err))
+	}
+	runtime.UnlockOSThread()
+}
+
 // GetProcAddress is used to get procedure address by name.
 func (ldr *PELoaderM) GetProcAddress(name string) (uintptr, error) {
+	ldr.lock()
+	defer ldr.unlock()
 	ptr, err := syscall.BytePtrFromString(name)
 	if err != nil {
 		return 0, err
@@ -157,20 +178,4 @@ func (ldr *PELoaderM) Destroy() error {
 		return &errno{method: "Destroy", errno: en}
 	}
 	return nil
-}
-
-func (ldr *PELoaderM) lock() {
-	hMutex := windows.Handle(ldr.runtimeMu)
-	_, err := windows.WaitForSingleObject(hMutex, windows.INFINITE)
-	if err != nil {
-		panic(fmt.Sprintf("failed to lock runtime mutex: %s", err))
-	}
-}
-
-func (ldr *PELoaderM) unlock() {
-	hMutex := windows.Handle(ldr.runtimeMu)
-	err := windows.ReleaseMutex(hMutex)
-	if err != nil {
-		panic(fmt.Sprintf("failed to release runtime mutex: %s", err))
-	}
 }
