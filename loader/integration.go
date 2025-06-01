@@ -14,29 +14,14 @@ import (
 )
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
+// If Options.WaitMain is true, the returned PELoaderM is always nil.
 func LoadInMemoryEXE(template, image []byte, opts *Options) (*PELoaderM, error) {
-	loader, err := loadInstance(template, image, opts, false)
-	if err != nil {
-		return nil, err
-	}
-	err = loader.Execute()
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute image: %s", err)
-	}
-	return loader, nil
+	return loadInstance(template, image, opts, false)
 }
 
 // LoadInMemoryDLL is used to load an unmanaged dll image to memory.
 func LoadInMemoryDLL(template, image []byte, opts *Options) (*PELoaderM, error) {
-	loader, err := loadInstance(template, image, opts, true)
-	if err != nil {
-		return nil, err
-	}
-	err = loader.Execute()
-	if err != nil {
-		return nil, fmt.Errorf("failed to call dll_main: %s", err)
-	}
-	return loader, nil
+	return loadInstance(template, image, opts, true)
 }
 
 func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM, error) {
@@ -88,5 +73,11 @@ func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM
 	if ptr == null {
 		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
 	}
-	return NewPELoader(ptr), nil
+	// if wait main, the loader and runtime will be destroyed
+	if opts.WaitMain == true {
+		return nil, nil
+	}
+	// copy memory for prevent runtime encrypt memory page when call loader method
+	loader := *(NewPELoader(ptr))
+	return &loader, nil
 }
