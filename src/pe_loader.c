@@ -1680,7 +1680,7 @@ static void ldr_exit_process(UINT uExitCode)
 
     dbg_log("[PE Loader]", "call ldr_exit_process: 0x%zX", uExitCode);
 
-    // make callback about DLL_PROCESS_DETACH
+    // process callback about DLL_PROCESS_DETACH
     if (loader->IsDLL)
     {
         pe_dll_main(DLL_PROCESS_DETACH, false);
@@ -1690,9 +1690,6 @@ static void ldr_exit_process(UINT uExitCode)
     {
         dbg_log("[PE Loader]", "failed to kill all threads");
     }
-
-    // execute TLS callback list befor call ExitThread.
-    ldr_tls_callback(DLL_PROCESS_DETACH);
 
     errno err = runtime->Core.Cleanup();
     if (err != NO_ERROR)
@@ -1962,7 +1959,7 @@ void hook_ExitProcess(UINT uExitCode)
     set_exit_code(uExitCode);
     set_running(false);
 
-    if (loader->Config.WaitMain)
+    if (loader->Config.WaitMain || loader->Config.NotStopRuntime)
     {
         loader->ExitThread(0);
         return;
@@ -2557,22 +2554,22 @@ uint LDR_ExitCode()
 
     if (!ldr_lock())
     {
-        return 1;
+        return (uint)(-2);
     }
 
     if (!ldr_lock_status())
     {
-        return 1;
+        return (uint)(-2);
     }
     uint code = loader->ExitCode;
     if (!ldr_unlock_status())
     {
-        return 1;
+        return (uint)(-2);
     }
 
     if (!ldr_unlock())
     {
-        return 1;
+        return (uint)(-2);
     }
     return code;
 }
@@ -2695,7 +2692,7 @@ errno LDR_Destroy()
 
     if (is_running())
     {
-        ldr_exit_process(0);
+        ldr_exit_process((uint)(-1));
     }
 
     errno err = NO_ERROR;
