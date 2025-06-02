@@ -43,15 +43,16 @@ PELoader_M* Boot()
     PELoader_Cfg config = {
         .FindAPI = runtime->HashAPI.FindAPI,
 
-        .Image        = NULL,
-        .CommandLineA = NULL,
-        .CommandLineW = NULL,
-        .WaitMain     = false,
-        .AllowSkipDLL = false,
-        .IgnoreStdIO  = false,
-        .StdInput     = NULL,
-        .StdOutput    = NULL,
-        .StdError     = NULL,
+        .Image          = NULL,
+        .CommandLineA   = NULL,
+        .CommandLineW   = NULL,
+        .WaitMain       = false,
+        .AllowSkipDLL   = false,
+        .IgnoreStdIO    = false,
+        .StdInput       = NULL,
+        .StdOutput      = NULL,
+        .StdError       = NULL,
+        .NotStopRuntime = false,
 
         .NotEraseInstruction = options.NotEraseInstruction,
         .NotAdjustProtect    = options.NotAdjustProtect,
@@ -205,6 +206,15 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     if (size != sizeof(HANDLE))
     {
         return ERR_INVALID_STD_ERROR;
+    }
+    // load NotStopRuntime, it must be true of false
+    if (!runtime->Argument.GetValue(ARG_ID_NOT_STOP_RUNTIME, &config->NotStopRuntime, &size))
+    {
+        return ERR_NOT_FOUND_NOT_STOP_RUNTIME;
+    }
+    if (size != sizeof(bool))
+    {
+        return ERR_INVALID_NOT_STOP_RUNTIME;
     }
     return NO_ERROR;
 }
