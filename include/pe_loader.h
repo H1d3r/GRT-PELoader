@@ -43,6 +43,9 @@ typedef struct {
     HANDLE StdOutput;
     HANDLE StdError;
 
+    // not stop runtime when call ExitProcess.
+    bool NotStopRuntime;
+
     // not erase instructions after call functions about Init or Exit.
     bool NotEraseInstruction;
 
