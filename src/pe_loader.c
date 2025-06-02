@@ -47,6 +47,7 @@ typedef struct {
     void* MainMemPage; // store all structures
     void* PEBackup;    // PE image backup
     bool  IsRunning;   // execution flag
+    uint  ExitCode;    // exit code from exit
 
     // loader resource
     HANDLE hMutex;   // global mutex
@@ -92,13 +93,11 @@ typedef struct {
     // about msvcrt/ucrtbase on exit
     void** on_exit;
     int32  num_exit;
-
-    // write return value
-    uint* ExitCode;
 } PELoader;
 
 // PE loader methods
 void* LDR_GetProc(LPSTR name);
+uint  LDR_ExitCode();
 errno LDR_Execute();
 errno LDR_Exit(uint exitCode);
 errno LDR_Destroy();
@@ -158,7 +157,6 @@ static HMODULE ldr_load_module(LPSTR name);
 static void pe_entry_point();
 static bool pe_dll_main(DWORD dwReason, bool setExitCode);
 static void set_exit_code(uint code);
-static uint get_exit_code();
 static void set_running(bool run);
 static bool is_running();
 static void clean_run_data();
@@ -324,12 +322,11 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     module->ExitCode   = 0;
     module->RuntimeMu  = runtime->Data.Mutex;
     // loader module methods
-    module->GetProc = GetFuncAddr(&LDR_GetProc);
-    module->Execute = GetFuncAddr(&LDR_Execute);
-    module->Exit    = GetFuncAddr(&LDR_Exit);
-    module->Destroy = GetFuncAddr(&LDR_Destroy);
-    // record return value pointer
-    loader->ExitCode = &module->ExitCode;
+    module->GetProc  = GetFuncAddr(&LDR_GetProc);
+    module->ExitCode = GetFuncAddr(&LDR_ExitCode);
+    module->Execute  = GetFuncAddr(&LDR_Execute);
+    module->Exit     = GetFuncAddr(&LDR_Exit);
+    module->Destroy  = GetFuncAddr(&LDR_Destroy);
     return module;
 }
 
@@ -2434,27 +2431,9 @@ static void set_exit_code(uint code)
         return;
     }
 
-    *loader->ExitCode = code;
+    loader->ExitCode = code;
 
     ldr_unlock_status();
-}
-
-static uint get_exit_code()
-{
-    PELoader* loader = getPELoaderPointer();
-
-    if (!ldr_lock_status())
-    {
-        return 1;
-    }
-
-    uint code = *loader->ExitCode;
-
-    if (!ldr_unlock_status())
-    {
-        return 1;
-    }
-    return code;
 }
 
 __declspec(noinline)
@@ -2572,6 +2551,33 @@ void* LDR_GetProc(LPSTR name)
 }
 
 __declspec(noinline)
+uint LDR_ExitCode()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (!ldr_lock())
+    {
+        return 1;
+    }
+
+    if (!ldr_lock_status())
+    {
+        return 1;
+    }
+    uint code = loader->ExitCode;
+    if (!ldr_unlock_status())
+    {
+        return 1;
+    }
+
+    if (!ldr_unlock())
+    {
+        return 1;
+    }
+    return code;
+}
+
+__declspec(noinline)
 errno LDR_Execute()
 {
     PELoader* loader = getPELoaderPointer();
@@ -2611,6 +2617,8 @@ errno LDR_Execute()
             errno = ERR_LOADER_PROCESS_DELAY_IMPORT;
             break;
         }
+        // reset exit code
+        loader->ExitCode = 0;
         // make callback about DLL_PROCESS_DETACH
         if (loader->IsDLL)
         {
