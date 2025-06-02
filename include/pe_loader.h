@@ -9,6 +9,7 @@
 #include "runtime.h"
 
 typedef void* (*GetProc_t)(LPSTR name);
+typedef uint  (*ExitCode_t)();
 typedef errno (*Execute_t)();
 typedef errno (*Exit_t)(uint exitCode);
 typedef errno (*Destroy_t)();
@@ -56,17 +57,17 @@ typedef struct {
     // absolute memory address about PE entry point.
     void* EntryPoint;
 
-    // this PE image is a DLL.
+    // is this PE image is a DLL image.
     bool IsDLL;
-
-    // main thread return value or argument about call ExitProcess.
-    uint ExitCode;
 
     // runtime mutex, need lock it before call some loader methods.
     HANDLE RuntimeMu;
 
     // get export procedure address by name, must call Execute before call it.
     GetProc_t GetProc;
+
+    // get main thread return value or argument about call ExitProcess.
+    ExitCode_t ExitCode;
 
     // create a thread at EntryPoint or call DllMain with DLL_PROCESS_ATTACH.
     // it can call multi times with Exit.
