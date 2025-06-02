@@ -75,14 +75,14 @@ type PELoaderM struct {
 	// is this PE image is a DLL image.
 	IsDLL bool
 
-	// main thread return value or argument about call ExitProcess.
-	ExitCode uint
-
 	// runtime mutex, need lock it before call some loader methods.
 	runtimeMu uintptr
 
 	// get export method address if PE image is a DLL.
 	getProc uintptr
+
+	// main thread return value or argument about call ExitProcess.
+	exitCode uintptr
 
 	// create a thread at EntryPoint, it can call multi times.
 	execute uintptr
@@ -144,6 +144,14 @@ func (ldr *PELoaderM) GetProcAddress(name string) (uintptr, error) {
 		return 0, &errno{method: "GetProc", errno: uintptr(en)}
 	}
 	return proc, nil
+}
+
+// ExitCode is used to get the exit code, it from main thread return value or api.
+func (ldr *PELoaderM) ExitCode() uint {
+	ldr.lock()
+	defer ldr.unlock()
+	code, _, _ := syscall.SyscallN(ldr.exitCode)
+	return uint(code)
 }
 
 // Execute is used to execute exe or call DllMain with DLL_PROCESS_ATTACH.
