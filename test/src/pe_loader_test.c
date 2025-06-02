@@ -40,7 +40,15 @@ bool TestInitPELoader()
         return false;
     }
 
-    // Read PE image file
+    // set HashAPI source
+    FindAPI_t findAPI;
+#ifdef NO_RUNTIME
+    findAPI = &FindAPI;
+#else
+    findAPI = runtime->HashAPI.FindAPI;
+#endif // NO_RUNTIME
+
+    // read PE image file
     LPSTR file;
 #ifdef _WIN64
     // file = "image\\x64\\go.exe";
@@ -81,21 +89,17 @@ bool TestInitPELoader()
     // cmdLineW = L"loader.exe -p1 123 -p2 \"test\"";
 
     PELoader_Cfg cfg = {
-    #ifdef NO_RUNTIME
-        .FindAPI = &FindAPI,
-    #else
-        .FindAPI = runtime->HashAPI.FindAPI,
-    #endif // NO_RUNTIME
-
-        .Image        = image.buf,
-        .CommandLineA = cmdLineA,
-        .CommandLineW = cmdLineW,
-        .WaitMain     = true,
-        .AllowSkipDLL = true,
-        .IgnoreStdIO  = false,
-        .StdInput     = NULL,
-        .StdOutput    = NULL,
-        .StdError     = NULL,
+        .FindAPI        = findAPI,
+        .Image          = image.buf,
+        .CommandLineA   = cmdLineA,
+        .CommandLineW   = cmdLineW,
+        .WaitMain       = true,
+        .AllowSkipDLL   = true,
+        .IgnoreStdIO    = false,
+        .StdInput       = NULL,
+        .StdOutput      = NULL,
+        .StdError       = NULL,
+        .NotStopRuntime = false,
 
         .NotEraseInstruction = true,
         .NotAdjustProtect    = false,
