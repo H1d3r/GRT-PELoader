@@ -51,6 +51,9 @@ type Options struct {
 	StdOutput uint64
 	StdError  uint64
 
+	// not stop runtime when call ExitProcess.
+	NotStopRuntime bool
+
 	// set Gleam-RT options, usually keep the default value.
 	Runtime option.Options
 }
@@ -84,20 +87,25 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		cmdLineA = []byte(cmdLine + "\x00")
 		cmdLineW = []byte(stringToUTF16(cmdLine))
 	}
-	// process WaitMain
-	waitMain := make([]byte, 1)
-	if opts.WaitMain {
-		waitMain[0] = 1
-	}
-	// process AllowSkipDLL
-	allowSkipDLL := make([]byte, 1)
-	if opts.AllowSkipDLL {
-		allowSkipDLL[0] = 1
-	}
-	// process IgnoreStdIO
-	ignoreStdIO := make([]byte, 1)
-	if opts.IgnoreStdIO {
-		ignoreStdIO[0] = 1
+	// process switch about loader config
+	var (
+		waitMain       = make([]byte, 1)
+		allowSkipDLL   = make([]byte, 1)
+		ignoreStdIO    = make([]byte, 1)
+		notStopRuntime = make([]byte, 1)
+	)
+	for _, item := range [...]struct {
+		data []byte
+		opt  bool
+	}{
+		{data: waitMain, opt: opts.WaitMain},
+		{data: allowSkipDLL, opt: opts.AllowSkipDLL},
+		{data: ignoreStdIO, opt: opts.IgnoreStdIO},
+		{data: notStopRuntime, opt: opts.NotStopRuntime},
+	} {
+		if item.opt {
+			item.data[0] = 1
+		}
 	}
 	// process standard handle
 	stdInput := binary.LittleEndian.AppendUint64(nil, opts.StdInput)
@@ -112,6 +120,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 	default:
 		return nil, fmt.Errorf("invalid architecture: %d", arch)
 	}
+	// process runtime options and encode arguments
 	tpl, err = option.Set(tpl, &opts.Runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
@@ -126,6 +135,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 		{ID: 7, Data: stdInput},
 		{ID: 8, Data: stdOutput},
 		{ID: 9, Data: stdError},
+		{ID: 10, Data: notStopRuntime},
 	}
 	stub, err := argument.Encode(args...)
 	if err != nil {
