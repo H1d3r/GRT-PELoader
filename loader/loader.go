@@ -57,6 +57,9 @@ type Config struct {
 	StdOutput uintptr
 	StdError  uintptr
 
+	// not stop runtime when call ExitProcess.
+	NotStopRuntime bool
+
 	// not erase instructions after call functions about Init or Exit.
 	NotEraseInstruction bool
 
