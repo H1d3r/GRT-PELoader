@@ -10,6 +10,8 @@
 
 typedef void* (*GetProc_t)(LPSTR name);
 typedef uint  (*ExitCode_t)();
+typedef errno (*Start_t)();
+typedef errno (*Wait_t)();
 typedef errno (*Execute_t)();
 typedef errno (*Exit_t)(uint exitCode);
 typedef errno (*Destroy_t)();
@@ -71,6 +73,14 @@ typedef struct {
 
     // get main thread return value or argument about call ExitProcess.
     ExitCode_t ExitCode;
+
+    // create a thread at EntryPoint, it useless for DLL image.
+    // it can call multi times with Wait and Exit.
+    Start_t Start;
+
+    // wait the thread at EntryPoint, it useless for DLL image.
+    // it can call multi times with Start.
+    Wait_t Wait;
 
     // create a thread at EntryPoint or call DllMain with DLL_PROCESS_ATTACH.
     // it can call multi times with Exit.
