@@ -150,15 +150,16 @@ bool TestPELoader_EXE()
         return true;
     }
 
-    uint exitCode = pe_loader->Execute();
-    if (exitCode != 0)
+    errno errno = pe_loader->Execute();
+    if (errno != NO_ERROR)
     {
-        printf_s("unexpected exit code: 0x%zX\n", exitCode);
+        printf_s("failed to execute: 0x%X\n", errno);
         return false;
     }
+
     runtime->Thread.Sleep(3000);
 
-    errno errno = pe_loader->Exit(0);
+    errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
     {
         printf_s("failed to exit PE loader: 0x%X\n", errno);
@@ -178,10 +179,10 @@ bool TestPELoader_DLL()
         return true;
     }
 
-    uint exitCode = pe_loader->Execute();
-    if (exitCode != 0)
+    errno errno = pe_loader->Execute();
+    if (errno != NO_ERROR)
     {
-        printf_s("unexpected exit code: 0x%zX\n", exitCode);
+        printf_s("failed to execute: 0x%X\n", errno);
         return false;
     }
 
@@ -198,7 +199,7 @@ bool TestPELoader_DLL()
 
     runtime->Thread.Sleep(3000);
 
-    errno errno = pe_loader->Exit(0);
+    errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
     {
         printf_s("failed to exit PE loader: 0x%X\n", errno);
@@ -214,15 +215,16 @@ bool TestPELoader_Exit()
         return false;
     }
 
-    uint exitCode = pe_loader->Execute();
-    if (exitCode != 0)
+    errno errno = pe_loader->Execute();
+    if (errno != NO_ERROR)
     {
-        printf_s("unexpected exit code: 0x%zX\n", exitCode);
+        printf_s("failed to execute: 0x%X\n", errno);
         return false;
     }
+
     runtime->Thread.Sleep(3000);
 
-    errno errno = pe_loader->Exit(0);
+    errno = pe_loader->Exit(0);
     if (errno != NO_ERROR)
     {
         printf_s("failed to exit PE loader: 0x%X\n", errno);
@@ -238,15 +240,16 @@ bool TestPELoader_Destroy()
         return false;
     }
 
-    uint exitCode = pe_loader->Execute();
-    if (exitCode != 0)
+    errno errno = pe_loader->Execute();
+    if (errno != NO_ERROR)
     {
-        printf_s("unexpected exit code: 0x%zX\n", exitCode);
+        printf_s("failed to execute: 0x%X\n", errno);
         return false;
     }
+
     runtime->Thread.Sleep(3000);
 
-    errno errno = pe_loader->Destroy();
+    errno = pe_loader->Destroy();
     if (errno != NO_ERROR)
     {
         printf_s("failed to destroy PE loader: 0x%X\n", errno);
