@@ -87,6 +87,14 @@ type PELoaderM struct {
 	// main thread return value or argument about call ExitProcess.
 	exitCode uintptr
 
+	// create a thread at EntryPoint, it useless for DLL image.
+	// it can call multi times with Wait and Exit.
+	start uintptr
+
+	// wait the thread at EntryPoint, it useless for DLL image.
+	// it can call multi times with Start.
+	wait uintptr
+
 	// create a thread at EntryPoint, it can call multi times.
 	execute uintptr
 
@@ -155,6 +163,28 @@ func (ldr *PELoaderM) ExitCode() uint {
 	defer ldr.unlock()
 	code, _, _ := syscall.SyscallN(ldr.exitCode)
 	return uint(code)
+}
+
+// Start is used to create a thread at EntryPoint, it useless for DLL image.
+// it can call multi times with Wait and Exit.
+func (ldr *PELoaderM) Start() error {
+	ldr.lock()
+	defer ldr.unlock()
+	en, _, _ := syscall.SyscallN(ldr.start)
+	if en != noError {
+		return &errno{method: "Start", errno: en}
+	}
+	return nil
+}
+
+// Wait is used to wait the thread at EntryPoint, it useless for DLL image.
+// it can call multi times with Start.
+func (ldr *PELoaderM) Wait() error {
+	en, _, _ := syscall.SyscallN(ldr.wait)
+	if en != noError {
+		return &errno{method: "Wait", errno: en}
+	}
+	return nil
 }
 
 // Execute is used to execute exe or call DllMain with DLL_PROCESS_ATTACH.
