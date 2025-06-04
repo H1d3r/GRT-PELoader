@@ -53,6 +53,7 @@ typedef struct {
     HANDLE hMutex;   // global mutex
     HANDLE hFileNUL; // for ignore console
     HANDLE StatusMu; // lock loader status
+    HANDLE hThread;  // thread at EntryPoint
 
     // store PE image information
     uintptr PEImage;
@@ -98,6 +99,8 @@ typedef struct {
 // PE loader methods
 void* LDR_GetProc(LPSTR name);
 uint  LDR_ExitCode();
+errno LDR_Start();
+errno LDR_Wait();
 errno LDR_Execute();
 errno LDR_Exit(uint exitCode);
 errno LDR_Destroy();
@@ -144,6 +147,7 @@ static bool  ldr_copy_image();
 static void* ldr_process_export(LPSTR name);
 static bool  ldr_process_import();
 static bool  ldr_process_delay_import();
+static errno ldr_start_process();
 static void  ldr_alloc_tls_block();
 static void  ldr_free_tls_block();
 static void  ldr_tls_callback(DWORD dwReason);
@@ -324,6 +328,8 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     // loader module methods
     module->GetProc  = GetFuncAddr(&LDR_GetProc);
     module->ExitCode = GetFuncAddr(&LDR_ExitCode);
+    module->Start    = GetFuncAddr(&LDR_Start);
+    module->Wait     = GetFuncAddr(&LDR_Wait);
     module->Execute  = GetFuncAddr(&LDR_Execute);
     module->Exit     = GetFuncAddr(&LDR_Exit);
     module->Destroy  = GetFuncAddr(&LDR_Destroy);
@@ -1529,6 +1535,70 @@ static HMODULE ldr_load_module(LPSTR name)
 }
 
 __declspec(noinline)
+static errno ldr_start_process()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    errno errno = NO_ERROR;
+    for (;;)
+    {
+        if (is_running())
+        {
+            break;
+        }
+        errno = ldr_init_mutex();
+        if (errno != NO_ERROR)
+        {
+            break;
+        }
+        if (!ldr_copy_image())
+        {
+            errno = ERR_LOADER_COPY_PE_IMAGE;
+            break;
+        }
+        // load library and fix function address
+        if (!ldr_process_import())
+        {
+            errno = ERR_LOADER_PROCESS_IMPORT;
+            break;
+        }
+        // load library and fix function address
+        if (!ldr_process_delay_import())
+        {
+            errno = ERR_LOADER_PROCESS_DELAY_IMPORT;
+            break;
+        }
+        // reset exit code
+        loader->ExitCode = 0;
+        // make callback about DLL_PROCESS_DETACH
+        if (loader->IsDLL)
+        {
+            if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
+            {
+                errno = ERR_LOADER_CALL_DLL_MAIN;
+                break;
+            }
+            set_running(true);
+            break;
+        }
+        // change the running status before create thread
+        set_running(true);
+        // create thread at entry point
+        void* ep = GetFuncAddr(&pe_entry_point);
+        HANDLE hThread = loader->CreateThread(NULL, 0, ep, NULL, 0, NULL);
+        if (hThread == NULL)
+        {
+            errno = ERR_LOADER_CREATE_MAIN_THREAD;
+            set_running(false);
+            break;
+        }
+        loader->hThread = hThread;
+        break;
+    }
+    return errno;
+}
+
+__declspec(noinline)
 static void ldr_alloc_tls_block()
 {
     PELoader*  loader  = getPELoaderPointer();
@@ -2575,7 +2645,7 @@ uint LDR_ExitCode()
 }
 
 __declspec(noinline)
-errno LDR_Execute()
+errno LDR_Start()
 {
     PELoader* loader = getPELoaderPointer();
 
@@ -2584,60 +2654,15 @@ errno LDR_Execute()
         return ERR_LOADER_LOCK;
     }
 
-    HANDLE hThread = NULL;
     errno errno = NO_ERROR;
     for (;;)
     {
-        if (is_running())
-        {
-            break;
-        }
-        errno = ldr_init_mutex();
-        if (errno != NO_ERROR)
-        {
-            break;
-        }
-        if (!ldr_copy_image())
-        {
-            errno = ERR_LOADER_COPY_PE_IMAGE;
-            break;
-        }
-        // load library and fix function address
-        if (!ldr_process_import())
-        {
-            errno = ERR_LOADER_PROCESS_IMPORT;
-            break;
-        }
-        // load library and fix function address
-        if (!ldr_process_delay_import())
-        {
-            errno = ERR_LOADER_PROCESS_DELAY_IMPORT;
-            break;
-        }
-        // reset exit code
-        loader->ExitCode = 0;
-        // make callback about DLL_PROCESS_DETACH
         if (loader->IsDLL)
         {
-            if (!pe_dll_main(DLL_PROCESS_ATTACH, true))
-            {
-                errno = ERR_LOADER_CALL_DLL_MAIN;
-                break;
-            }
-            set_running(true);
+            errno = ERR_LOADER_NOT_EXE_IMAGE;
             break;
         }
-        // change the running status before create thread
-        set_running(true);
-        // create thread at entry point
-        void* ep = GetFuncAddr(&pe_entry_point);
-        hThread = loader->CreateThread(NULL, 0, ep, NULL, 0, NULL);
-        if (hThread == NULL)
-        {
-            errno = ERR_LOADER_CREATE_MAIN_THREAD;
-            set_running(false);
-            break;
-        }
+        errno = ldr_start_process();
         break;
     }
 
@@ -2645,7 +2670,41 @@ errno LDR_Execute()
     {
         return ERR_LOADER_UNLOCK;
     }
+    return errno;
+}
 
+__declspec(noinline)
+errno LDR_Wait()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (!ldr_lock())
+    {
+        return ERR_LOADER_LOCK;
+    }
+
+    HANDLE hThread = loader->hThread;
+
+    if (!ldr_unlock())
+    {
+        return ERR_LOADER_UNLOCK;
+    }
+
+    if (hThread == NULL)
+    {
+        return NO_ERROR;
+    }
+    loader->WaitForSingleObject(hThread, INFINITE);
+    return NO_ERROR;
+}
+
+__declspec(noinline)
+errno LDR_Execute()
+{
+    PELoader* loader = getPELoaderPointer();
+
+
+   
     if (hThread != NULL)
     {
         // wait main thread exit
