@@ -2683,18 +2683,35 @@ errno LDR_Wait()
         return ERR_LOADER_LOCK;
     }
 
-    HANDLE hThread = loader->hThread;
+    HANDLE hThread = NULL;
+    errno  errno   = NO_ERROR;
+    for (;;)
+    {
+        if (loader->IsDLL)
+        {
+            errno = ERR_LOADER_NOT_EXE_IMAGE;
+            break;
+        }
+        hThread = loader->hThread;
+        loader->hThread = NULL;
+        break;
+    }
 
     if (!ldr_unlock())
     {
         return ERR_LOADER_UNLOCK;
     }
 
+    if (errno != NO_ERROR)
+    {
+        return errno;
+    }
     if (hThread == NULL)
     {
-        return NO_ERROR;
+        return ERR_LOADER_PROCESS_IS_NOT_START;
     }
     loader->WaitForSingleObject(hThread, INFINITE);
+    loader->CloseHandle(hThread);
     return NO_ERROR;
 }
 
@@ -2703,8 +2720,30 @@ errno LDR_Execute()
 {
     PELoader* loader = getPELoaderPointer();
 
+    if (!ldr_lock())
+    {
+        return ERR_LOADER_LOCK;
+    }
 
-   
+    HANDLE hThread = NULL;
+    errno  errno   = NO_ERROR;
+    for (;;)
+    {
+        errno = ldr_start_process();
+        if (errno != NO_ERROR)
+        {
+            break;
+        }
+        hThread = loader->hThread;
+        loader->hThread = NULL;
+        break;
+    }
+
+    if (!ldr_unlock())
+    {
+        return ERR_LOADER_UNLOCK;
+    }
+
     if (hThread != NULL)
     {
         // wait main thread exit
