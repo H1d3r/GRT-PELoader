@@ -208,6 +208,41 @@ bool TestPELoader_DLL()
     return true;
 }
 
+bool TestPELoader_Start()
+{
+    if (pe_loader == NULL)
+    {
+        return false;
+    }
+
+    if (pe_loader->IsDLL)
+    {
+        return true;
+    }
+
+    errno errno = pe_loader->Start();
+    if (errno != NO_ERROR)
+    {
+        printf_s("failed to start: 0x%X\n", errno);
+        return false;
+    }
+
+    errno = pe_loader->Wait();
+    if (errno != NO_ERROR)
+    {
+        printf_s("failed to wait: 0x%X\n", errno);
+        return false;
+    }
+
+    errno = pe_loader->Wait();
+    if (errno != ERR_LOADER_PROCESS_IS_NOT_START)
+    {
+        printf_s("failed to wait twice\n");
+        return false;
+    }
+    return true;
+}
+
 bool TestPELoader_Exit()
 {
     if (pe_loader == NULL)
@@ -215,19 +250,31 @@ bool TestPELoader_Exit()
         return false;
     }
 
-    errno errno = pe_loader->Execute();
+    if (pe_loader->IsDLL)
+    {
+        return true;
+    }
+
+    errno errno = pe_loader->Start();
     if (errno != NO_ERROR)
     {
-        printf_s("failed to execute: 0x%X\n", errno);
+        printf_s("failed to start: 0x%X\n", errno);
         return false;
     }
 
-    runtime->Thread.Sleep(3000);
+    runtime->Thread.Sleep(1000);
 
-    errno = pe_loader->Exit(0);
+    errno = pe_loader->Exit(123);
     if (errno != NO_ERROR)
     {
         printf_s("failed to exit PE loader: 0x%X\n", errno);
+        return false;
+    }
+
+    uint code = pe_loader->ExitCode();
+    if (code != 123)
+    {
+        printf_s("unexpected exit code\n");
         return false;
     }
     return true;
