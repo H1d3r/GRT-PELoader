@@ -15,6 +15,7 @@ PELoader_M* pe_loader;
 bool TestInitPELoader();
 bool TestPELoader_EXE();
 bool TestPELoader_DLL();
+bool TestPELoader_Start();
 bool TestPELoader_Exit();
 bool TestPELoader_Destroy();
 #pragma warning(pop)
@@ -27,6 +28,7 @@ static unit tests[] =
     { "InitPELoader",     TestInitPELoader     },
     { "PELoader_EXE",     TestPELoader_EXE     },
     { "PELoader_DLL",     TestPELoader_DLL     },
+    { "PELoader_Start",   TestPELoader_Start   },
     { "PELoader_Exit",    TestPELoader_Exit    },
     { "PELoader_Destroy", TestPELoader_Destroy },
 };
