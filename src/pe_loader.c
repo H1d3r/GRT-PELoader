@@ -1735,9 +1735,10 @@ static void ldr_do_exit()
     int32 num = loader->num_exit;
     for (int32 i = num - 1; i >= 0; i--)
     {
-        void (__cdecl *func)() = (void (__cdecl *)())(loader->on_exit[i]);
-        func();
-        dbg_log("[PE Loader]", "call exit callback: 0x%zX", func);
+        typedef void(__cdecl *exit_t)();
+        exit_t exit = (exit_t)(loader->on_exit[i]);
+        exit();
+        dbg_log("[PE Loader]", "call exit callback: 0x%zX", exit);
     }
 
     ldr_unlock_status();
@@ -1765,6 +1766,13 @@ static void ldr_exit_process(UINT uExitCode)
     if (err != NO_ERROR)
     {
         dbg_log("[PE Loader]", "failed to cleanup: 0x%X", err);
+    }
+
+    // Exit or Destroy after call Start()
+    if (loader->hThread != NULL)
+    {
+        loader->CloseHandle(loader->hThread);
+        loader->hThread = NULL;
     }
 
     clean_run_data();
@@ -2692,6 +2700,11 @@ errno LDR_Wait()
             errno = ERR_LOADER_NOT_EXE_IMAGE;
             break;
         }
+        if (!is_running())
+        {
+            errno = ERR_LOADER_PROCESS_IS_NOT_START;
+            break;
+        }
         hThread = loader->hThread;
         loader->hThread = NULL;
         break;
@@ -2705,10 +2718,6 @@ errno LDR_Wait()
     if (errno != NO_ERROR)
     {
         return errno;
-    }
-    if (hThread == NULL)
-    {
-        return ERR_LOADER_PROCESS_IS_NOT_START;
     }
     loader->WaitForSingleObject(hThread, INFINITE);
     loader->CloseHandle(hThread);
@@ -2744,17 +2753,19 @@ errno LDR_Execute()
         return ERR_LOADER_UNLOCK;
     }
 
-    if (hThread != NULL)
+    if (errno != NO_ERROR)
     {
-        // wait main thread exit
-        if (loader->Config.WaitMain)
-        {
-            loader->WaitForSingleObject(hThread, INFINITE);
-            set_running(false);
-        }
-        loader->CloseHandle(hThread);
+        return errno;
     }
-    return errno;
+
+    // wait main thread exit
+    if (loader->Config.WaitMain)
+    {
+        loader->WaitForSingleObject(hThread, INFINITE);
+        set_running(false);
+    }
+    loader->CloseHandle(hThread);
+    return NO_ERROR;
 }
 
 __declspec(noinline)
