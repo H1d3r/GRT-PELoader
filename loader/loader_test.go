@@ -86,45 +86,6 @@ func TestPELoader(t *testing.T) {
 		time.Sleep(3 * time.Second)
 	})
 
-	t.Run("ignore output", func(t *testing.T) {
-		var image Image
-		switch runtime.GOARCH {
-		case "386":
-			image = NewFile("../test/image/x86/rust_msvc.exe")
-		case "amd64":
-			image = NewFile("../test/image/x64/rust_msvc.exe")
-		default:
-			t.Fatal("unsupported architecture")
-		}
-
-		opts := &Options{
-			ImageName:   "test.exe",
-			WaitMain:    true,
-			IgnoreStdIO: true,
-
-			StdInput:  1, // will be overwritten
-			StdOutput: 2, // will be overwritten
-			StdError:  3, // will be overwritten
-		}
-		var (
-			inst []byte
-			err  error
-		)
-		switch runtime.GOARCH {
-		case "386":
-			inst, err = CreateInstance(testLDRx86, 32, image, opts)
-		case "amd64":
-			inst, err = CreateInstance(testLDRx64, 64, image, opts)
-		default:
-			t.Fatal("unsupported architecture")
-		}
-		require.NoError(t, err)
-
-		addr := loadShellcode(t, inst)
-		ret, _, err := syscallN(addr)
-		require.NotEqual(t, uintptr(0), ret, err)
-	})
-
 	t.Run("dll", func(t *testing.T) {
 		image := NewFile("C:\\Windows\\System32\\ws2_32.dll")
 		opts := &Options{
@@ -162,6 +123,46 @@ func TestPELoader(t *testing.T) {
 		err = PELoaderM.Destroy()
 		require.NoError(t, err)
 	})
+
+	t.Run("ignore output", func(t *testing.T) {
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/rust_msvc.exe")
+		default:
+			t.Fatal("unsupported architecture")
+		}
+
+		opts := &Options{
+			ImageName:   "test.exe",
+			WaitMain:    true,
+			IgnoreStdIO: true,
+
+			StdInput:  1, // will be overwritten
+			StdOutput: 2, // will be overwritten
+			StdError:  3, // will be overwritten
+		}
+		var (
+			inst []byte
+			err  error
+		)
+		switch runtime.GOARCH {
+		case "386":
+			inst, err = CreateInstance(testLDRx86, 32, image, opts)
+		case "amd64":
+			inst, err = CreateInstance(testLDRx64, 64, image, opts)
+		default:
+			t.Fatal("unsupported architecture")
+		}
+		require.NoError(t, err)
+
+		addr := loadShellcode(t, inst)
+		ptr, _, err := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ptr, err)
+	})
+
 }
 
 func TestTrimmedPELoader(t *testing.T) {
@@ -227,6 +228,44 @@ func TestTrimmedPELoader(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("dll", func(t *testing.T) {
+		// initialize Gleam-RT
+		addr := loadShellcode(t, rt)
+		fmt.Printf("Runtime:   0x%X\n", addr)
+		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
+		require.NoError(t, err)
+
+		// read pe data
+		pe, err := os.ReadFile("C:\\Windows\\System32\\ws2_32.dll")
+		require.NoError(t, err)
+		config := Config{
+			FindAPI:      RuntimeM.HashAPI.FindAPI,
+			Image:        (uintptr)(unsafe.Pointer(&pe[0])),
+			AllowSkipDLL: true,
+		}
+
+		// initialize PELoader
+		addr = loadShellcode(t, ldr)
+		fmt.Printf("PE Loader: 0x%X\n", addr)
+		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
+		require.NoError(t, err)
+
+		// call DllMain DLL_PROCESS_ATTACH
+		err = PELoaderM.Execute()
+		require.NoError(t, err)
+
+		proc, err := PELoaderM.GetProcAddress("connect")
+		require.NoError(t, err)
+		fmt.Printf("ws2_32.connect: 0x%X\n", proc)
+
+		// call DllMain DLL_PROCESS_DETACH
+		err = PELoaderM.Exit(0)
+		require.NoError(t, err)
+
+		err = PELoaderM.Destroy()
+		require.NoError(t, err)
+	})
+
 	t.Run("ignore output", func(t *testing.T) {
 		// initialize Gleam-RT
 		addr := loadShellcode(t, rt)
@@ -267,7 +306,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("dll", func(t *testing.T) {
+	t.Run("start and wait", func(t *testing.T) {
 		// initialize Gleam-RT
 		addr := loadShellcode(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
@@ -275,12 +314,18 @@ func TestTrimmedPELoader(t *testing.T) {
 		require.NoError(t, err)
 
 		// read pe data
-		pe, err := os.ReadFile("C:\\Windows\\System32\\ws2_32.dll")
+		var pe []byte
+		switch runtime.GOARCH {
+		case "386":
+			pe, err = os.ReadFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			pe, err = os.ReadFile("../test/image/x64/rust_msvc.exe")
+		}
 		require.NoError(t, err)
 		config := Config{
-			FindAPI:      RuntimeM.HashAPI.FindAPI,
-			Image:        (uintptr)(unsafe.Pointer(&pe[0])),
-			AllowSkipDLL: true,
+			FindAPI:        RuntimeM.HashAPI.FindAPI,
+			Image:          (uintptr)(unsafe.Pointer(&pe[0])),
+			NotStopRuntime: true,
 		}
 
 		// initialize PELoader
@@ -289,17 +334,57 @@ func TestTrimmedPELoader(t *testing.T) {
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)
 
-		// call DllMain DLL_PROCESS_ATTACH
-		err = PELoaderM.Execute()
+		err = PELoaderM.Start()
 		require.NoError(t, err)
 
-		proc, err := PELoaderM.GetProcAddress("connect")
+		err = PELoaderM.Wait()
 		require.NoError(t, err)
-		fmt.Printf("ws2_32.connect: 0x%X\n", proc)
 
-		// call DllMain DLL_PROCESS_DETACH
-		err = PELoaderM.Exit(0)
+		err = PELoaderM.Destroy()
 		require.NoError(t, err)
+	})
+
+	t.Run("start but not wait", func(t *testing.T) {
+		// initialize Gleam-RT
+		addr := loadShellcode(t, rt)
+		fmt.Printf("Runtime:   0x%X\n", addr)
+		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
+		require.NoError(t, err)
+
+		// read pe data
+		var pe []byte
+		switch runtime.GOARCH {
+		case "386":
+			pe, err = os.ReadFile("../test/image/x86/go.exe")
+		case "amd64":
+			pe, err = os.ReadFile("../test/image/x64/go.exe")
+		}
+		require.NoError(t, err)
+
+		cmdLineA := []byte("-kick 10\x00")
+		cmdLineW := []byte(stringToUTF16("-kick 10\x00"))
+		config := Config{
+			FindAPI:      RuntimeM.HashAPI.FindAPI,
+			Image:        (uintptr)(unsafe.Pointer(&pe[0])),
+			CommandLineA: (uintptr)(unsafe.Pointer(&cmdLineA[0])),
+			CommandLineW: (uintptr)(unsafe.Pointer(&cmdLineW[0])),
+		}
+
+		// initialize PELoader
+		addr = loadShellcode(t, ldr)
+		fmt.Printf("PE Loader: 0x%X\n", addr)
+		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
+		require.NoError(t, err)
+
+		err = PELoaderM.Start()
+		require.NoError(t, err)
+
+		time.Sleep(3 * time.Second)
+
+		err = PELoaderM.Exit(123)
+		require.NoError(t, err)
+		code := PELoaderM.ExitCode()
+		require.Equal(t, uint(123), code)
 
 		err = PELoaderM.Destroy()
 		require.NoError(t, err)
