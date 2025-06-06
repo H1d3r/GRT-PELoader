@@ -144,6 +144,7 @@ func TestPELoader(t *testing.T) {
 			StdOutput: 2, // will be overwritten
 			StdError:  3, // will be overwritten
 		}
+
 		var (
 			inst []byte
 			err  error
@@ -163,6 +164,50 @@ func TestPELoader(t *testing.T) {
 		require.NotEqual(t, uintptr(0), ptr, err)
 	})
 
+	t.Run("exit", func(t *testing.T) {
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/go.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/go.exe")
+		default:
+			t.Fatal("unsupported architecture")
+		}
+
+		opts := &Options{
+			ImageName:      "test.exe",
+			CommandLine:    "-kick 50",
+			WaitMain:       false,
+			NotStopRuntime: true,
+		}
+		var (
+			inst []byte
+			err  error
+		)
+		switch runtime.GOARCH {
+		case "386":
+			inst, err = CreateInstance(testLDRx86, 32, image, opts)
+		case "amd64":
+			inst, err = CreateInstance(testLDRx64, 64, image, opts)
+		default:
+			t.Fatal("unsupported architecture")
+		}
+		require.NoError(t, err)
+
+		addr := loadShellcode(t, inst)
+		ptr, _, err := syscallN(addr)
+		require.NotEqual(t, uintptr(0), ptr, err)
+		PELoaderM := NewPELoader(ptr)
+		spew.Dump(PELoaderM)
+
+		time.Sleep(3 * time.Second)
+
+		err = PELoaderM.Exit(123)
+		require.NoError(t, err)
+		code := PELoaderM.ExitCode()
+		require.Equal(t, uint(123), code)
+	})
 }
 
 func TestTrimmedPELoader(t *testing.T) {
@@ -344,7 +389,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("start but not wait", func(t *testing.T) {
+	t.Run("start only", func(t *testing.T) {
 		// initialize Gleam-RT
 		addr := loadShellcode(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
@@ -361,8 +406,9 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 		require.NoError(t, err)
 
-		cmdLineA := []byte("-kick 10\x00")
-		cmdLineW := []byte(stringToUTF16("-kick 10\x00"))
+		cmdLine := "-kick 50\x00"
+		cmdLineA := []byte(cmdLine)
+		cmdLineW := []byte(stringToUTF16(cmdLine))
 		config := Config{
 			FindAPI:      RuntimeM.HashAPI.FindAPI,
 			Image:        (uintptr)(unsafe.Pointer(&pe[0])),
