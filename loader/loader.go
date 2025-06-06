@@ -106,8 +106,11 @@ type PELoaderM struct {
 }
 
 // NewPELoader is used to create PELoader from initialized instance.
+// It will copy memory for prevent runtime encrypt memory page when
+// call loader or runtime methods.
 func NewPELoader(ptr uintptr) *PELoaderM {
-	return (*PELoaderM)(unsafe.Pointer(ptr)) // #nosec
+	ldr := *(*PELoaderM)(unsafe.Pointer(ptr)) // #nosec
+	return &ldr
 }
 
 // InitPELoader is used to initialize PE Loader from shellcode instance.
@@ -119,9 +122,7 @@ func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PEL
 	if ptr == null {
 		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", err)
 	}
-	// copy memory for prevent runtime encrypt memory page when call loader method
-	loader := *(NewPELoader(ptr))
-	return &loader, nil
+	return NewPELoader(ptr), nil
 }
 
 func (ldr *PELoaderM) lock() {
