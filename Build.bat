@@ -52,6 +52,9 @@ go run dump.go
 echo ===================== test shellcode =====================
 call test.bat
 
+echo ===================== copy shellcode =====================
+copy /Y dist\*.bin loader\template
+
 echo ==========================================================
 echo                  build shellcode finish!
 echo ==========================================================
