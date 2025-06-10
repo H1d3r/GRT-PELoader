@@ -9,6 +9,13 @@
 #include "errno.h"
 
 // about runtime options at the shellcode tail.
+//
+// +------------+---------+---------+-----------+
+// | magic mark | option1 | option2 | option... |
+// +------------+---------+---------+-----------+
+// |    0xFC    |   var   |   var   |    var    |
+// +------------+---------+---------+-----------+
+
 #define OPTION_STUB_SIZE  64
 #define OPTION_STUB_MAGIC 0xFC
 
@@ -297,14 +304,16 @@ typedef uint (*MemScanByValue_t)(void* value, uint size, uintptr* results, uint 
 typedef uint (*MemScanByPattern_t)(byte* pattern, uintptr* results, uint maxItem);
 typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
 
-// GetProcAddress, GetProcAddressByName and GetProcAddressByHash
-// are use Hash API module for implement original GetProcAddress.
-// GetProcAddressOriginal is not recommend, usually use
-// GetProcAddressByName with hook FALSE instead it.
-// These methods are used for IAT hooks or common shellcode.
-typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, bool hook);
-typedef void* (*GetProcByHash_t)(uint hash, uint key, bool hook);
-typedef void* (*GetProcOriginal_t)(HMODULE hModule, LPCSTR lpProcName);
+// GetProcByName and GetProcByHash are use HashAPI module for
+// implement original GetProcAddress.
+// 
+// GetProcAddress is not recommend, because GetProcAddressByName
+// will try to use HashAPI first, then use original GetProcAddress,
+// recommend use GetProcByName with redirect FALSE instead it.
+// 
+// These methods are used for API Redirector or common shellcode.
+typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, bool redirect);
+typedef void* (*GetProcByHash_t)(uint hash, uint key, bool redirect);
 
 // about sysmon
 #ifndef SYSMON_H
@@ -345,7 +354,7 @@ typedef errno (*WDContinue_t)();
 // are used to test and research, if use them, runtime will loss
 // the shield protect and structure data encrypt.
 //
-// SleepHR is used to call Hide, Sleep and Recover, usually it called by hook.
+// SleepHR is used to call Hide, Sleep and Recover.
 // Cleanup is used to clean all tracked object except locked.
 // 
 // Exit is used to clean all tracked object and clean runtime self,
@@ -516,9 +525,8 @@ typedef struct {
     } MemScanner;
 
     struct {
-        GetProcByName_t   GetProcByName;
-        GetProcByHash_t   GetProcByHash;
-        GetProcOriginal_t GetProcOriginal;
+        GetProcByName_t GetProcByName;
+        GetProcByHash_t GetProcByHash;
     } Procedure;
 
     struct {
@@ -539,6 +547,15 @@ typedef struct {
     } Watchdog;
 
     struct {
+        GetProcAddress_t GetProcAddress;
+        ExitProcess_t    ExitProcess;
+    } Raw;
+
+    struct {
+        HANDLE Mutex;
+    } Data;
+
+    struct {
         RTSleepHR_t Sleep;
         RTHide_t    Hide;
         RTRecover_t Recover;
@@ -547,12 +564,6 @@ typedef struct {
         RTExit_t    Exit;
         RTStop_t    Stop;
     } Core;
-
-    struct {
-        HANDLE Mutex;
-    } Data;
-
-    ExitProcess_t ExitProcess;
 } Runtime_M;
 
 typedef struct {
@@ -574,7 +585,7 @@ typedef struct {
     bool NotAdjustProtect;
 
     // track current thread for test or debug mode.
-    // it maybe improve the single thread model.
+    // it maybe improved the single thread model.
     bool TrackCurrentThread;
 } Runtime_Opts;
 
