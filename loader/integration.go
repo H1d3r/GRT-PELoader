@@ -7,11 +7,40 @@ import (
 	"debug/pe"
 	"errors"
 	"fmt"
+	"io"
 	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+// Instance contains the allocated memory page and pipe.
+type Instance struct {
+	instAddress uintptr
+
+	stdInputFile  io.WriteCloser
+	stdOutputFile io.ReadCloser
+	stdErrorFile  io.ReadCloser
+
+	PELoaderM
+}
+
+func (inst *Instance) Restart() error {
+	return nil
+}
+
+// Free is used to destroy instance and free memory page about it.
+func (inst *Instance) Free() error {
+	err := inst.Destroy()
+	if err != nil {
+		return err
+	}
+	err = windows.VirtualFree(inst.instAddress, 0, windows.MEM_RELEASE)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
 // If Options.WaitMain is true, the returned PELoaderM is always nil.
@@ -41,11 +70,53 @@ func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM
 	default:
 		return nil, errors.New("unknown pe image architecture type")
 	}
-	// overwrite some options
 	if opts == nil {
 		opts = new(Options)
 	}
+	// process pipe
+	// var (
+	// 	stdInput  = opts.StdInput
+	// 	stdOutput = opts.StdOutput
+	// 	stdError  = opts.StdError
+	// )
+	// var (
+	// 	stdInputFile  io.WriteCloser
+	// 	stdOutputFile io.ReadCloser
+	// 	stdErrorFile  io.ReadCloser
+	// )
+	// if opts.StdInputFile != nil {
+	// 	r, w, err := os.Pipe()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	stdInput = uint64(r.Fd())
+	// 	stdInputFile = w
+	// }
+	// if opts.StdOutputFile != nil {
+	// 	r, w, err := os.Pipe()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	stdOutput = uint64(w.Fd())
+	// 	stdOutputFile = r
+	// }
+	// if opts.StdErrorFile != nil {
+	// 	r, w, err := os.Pipe()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	stdError = uint64(w.Fd())
+	// 	stdErrorFile = r
+	// }
+	// overwrite options for control instance
 	options := *opts
+	options.WaitMain = false
+
+	// options.StdInput
+	// options.StdOutput
+	// options.StdError
+
+	options.NotStopRuntime = true
 	options.Runtime.NotAdjustProtect = true
 	options.Runtime.TrackCurrentThread = false
 	// create instance
@@ -73,11 +144,5 @@ func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM
 	if ptr == null {
 		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
 	}
-	// if wait main, the loader and runtime will be destroyed
-	if opts.WaitMain == true {
-		return nil, nil
-	}
-	// copy memory for prevent runtime encrypt memory page when call loader method
-	loader := *(NewPELoader(ptr))
-	return &loader, nil
+	return NewPELoader(ptr), nil
 }
