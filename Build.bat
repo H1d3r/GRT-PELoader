@@ -38,6 +38,9 @@ echo ----------cut PE Loader for x64----------
 "..\x64\Release\cutter.exe"
 cd ..
 
+echo ===================== copy shellcode =====================
+copy /Y dist\*.bin loader\template
+
 echo =================== clean output files ===================
 rd /S /Q "builder\Release"
 rd /S /Q "builder\x64"
@@ -51,9 +54,6 @@ go run dump.go
 
 echo ===================== test shellcode =====================
 call test.bat
-
-echo ===================== copy shellcode =====================
-copy /Y dist\*.bin loader\template
 
 echo ==========================================================
 echo                  build shellcode finish!
