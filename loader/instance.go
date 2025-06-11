@@ -1,8 +1,10 @@
 package loader
 
 import (
+	"embed"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"strings"
 	"unicode/utf16"
 
@@ -10,11 +12,22 @@ import (
 	"github.com/RSSU-Shellcode/GRT-Develop/option"
 )
 
+// just for prevent [import _ "embed"] :)
+var _ embed.FS
+
 // load mode about image source.
 const (
 	ModeEmbed = "embed"
 	ModeFile  = "file"
 	ModeHTTP  = "http"
+)
+
+var (
+	//go:embed template/PELoader_x86.bin
+	defaultTemplateX86 []byte
+
+	//go:embed template/PELoader_x64.bin
+	defaultTemplateX64 []byte
 )
 
 // Image contains the various load mode.
@@ -28,6 +41,9 @@ type Image interface {
 
 // Options contains options about create instance.
 type Options struct {
+	// set the custom loader template.
+	Template []byte
+
 	// set the custom image name about the command line prefix.
 	ImageName string
 
@@ -56,10 +72,15 @@ type Options struct {
 
 	// set Gleam-RT options, usually keep the default value.
 	Runtime option.Options
+
+	// for interactive with go program.
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // CreateInstance is used to create instance from PE Loader template.
-func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, error) {
+func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	if opts == nil {
 		opts = new(Options)
 	}
@@ -107,21 +128,28 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 			item.data[0] = 1
 		}
 	}
-	// process standard handle
+	// process standard handle and default template
 	stdInput := binary.LittleEndian.AppendUint64(nil, opts.StdInput)
 	stdOutput := binary.LittleEndian.AppendUint64(nil, opts.StdOutput)
 	stdError := binary.LittleEndian.AppendUint64(nil, opts.StdError)
+	var defaultTemplate []byte
 	switch arch {
-	case 32:
+	case "386":
 		stdInput = stdInput[:4]
 		stdOutput = stdOutput[:4]
 		stdError = stdError[:4]
-	case 64:
+		defaultTemplate = defaultTemplateX86
+	case "amd64":
+		defaultTemplate = defaultTemplateX64
 	default:
-		return nil, fmt.Errorf("invalid architecture: %d", arch)
+		return nil, fmt.Errorf("invalid architecture: %s", arch)
 	}
 	// process runtime options and encode arguments
-	tpl, err = option.Set(tpl, &opts.Runtime)
+	template := opts.Template
+	if template == nil {
+		template = defaultTemplate
+	}
+	template, err = option.Set(template, &opts.Runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
 	}
@@ -141,7 +169,7 @@ func CreateInstance(tpl []byte, arch int, image Image, opts *Options) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode argument: %s", err)
 	}
-	return append(tpl, stub...), nil
+	return append(template, stub...), nil
 }
 
 func stringToUTF16(s string) string {
