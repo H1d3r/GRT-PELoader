@@ -50,6 +50,13 @@ func TestPELoader(t *testing.T) {
 
 		r, w, err := os.Pipe()
 		require.NoError(t, err)
+		go func() {
+			reader := bufio.NewScanner(r)
+			for reader.Scan() {
+				fmt.Println(reader.Text())
+			}
+		}()
+
 		opts := &Options{
 			ImageName: "test.exe",
 			WaitMain:  false,
@@ -58,23 +65,7 @@ func TestPELoader(t *testing.T) {
 			StdOutput: uint64(w.Fd()),
 			StdError:  uint64(w.Fd()),
 		}
-
-		go func() {
-			reader := bufio.NewScanner(r)
-			for reader.Scan() {
-				fmt.Println(reader.Text())
-			}
-		}()
-
-		var inst []byte
-		switch runtime.GOARCH {
-		case "386":
-			inst, err = CreateInstance(testLDRx86, 32, image, opts)
-		case "amd64":
-			inst, err = CreateInstance(testLDRx64, 64, image, opts)
-		default:
-			t.Fatal("unsupported architecture")
-		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
@@ -92,18 +83,7 @@ func TestPELoader(t *testing.T) {
 			WaitMain:     false,
 			AllowSkipDLL: true,
 		}
-		var (
-			inst []byte
-			err  error
-		)
-		switch runtime.GOARCH {
-		case "386":
-			inst, err = CreateInstance(testLDRx86, 32, image, opts)
-		case "amd64":
-			inst, err = CreateInstance(testLDRx64, 64, image, opts)
-		default:
-			t.Fatal("unsupported architecture")
-		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
@@ -144,19 +124,7 @@ func TestPELoader(t *testing.T) {
 			StdOutput: 2, // will be overwritten
 			StdError:  3, // will be overwritten
 		}
-
-		var (
-			inst []byte
-			err  error
-		)
-		switch runtime.GOARCH {
-		case "386":
-			inst, err = CreateInstance(testLDRx86, 32, image, opts)
-		case "amd64":
-			inst, err = CreateInstance(testLDRx64, 64, image, opts)
-		default:
-			t.Fatal("unsupported architecture")
-		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
@@ -181,18 +149,7 @@ func TestPELoader(t *testing.T) {
 			WaitMain:       false,
 			NotStopRuntime: true,
 		}
-		var (
-			inst []byte
-			err  error
-		)
-		switch runtime.GOARCH {
-		case "386":
-			inst, err = CreateInstance(testLDRx86, 32, image, opts)
-		case "amd64":
-			inst, err = CreateInstance(testLDRx64, 64, image, opts)
-		default:
-			t.Fatal("unsupported architecture")
-		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
 		addr := loadShellcode(t, inst)
