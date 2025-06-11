@@ -116,7 +116,7 @@ func TestEmbedInstance(t *testing.T) {
 				wg.Add(1)
 				go func(img Image) {
 					defer wg.Done()
-					inst, err := CreateInstance(testLDRx86, 32, img, opts)
+					inst, err := CreateInstance("386", img, opts)
 					require.NoError(t, err)
 
 					addr := loadShellcode(t, inst)
@@ -155,7 +155,7 @@ func TestEmbedInstance(t *testing.T) {
 				wg.Add(1)
 				go func(img Image) {
 					defer wg.Done()
-					inst, err := CreateInstance(testLDRx64, 64, img, opts)
+					inst, err := CreateInstance("amd64", img, opts)
 					require.NoError(t, err)
 
 					addr := loadShellcode(t, inst)
