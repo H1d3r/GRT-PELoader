@@ -7,23 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	testLDRx86 []byte
-	testLDRx64 []byte
-)
-
-func init() {
-	var err error
-	testLDRx86, err = os.ReadFile("../dist/PELoader_x86.bin")
-	if err != nil {
-		panic(err)
-	}
-	testLDRx64, err = os.ReadFile("../dist/PELoader_x64.bin")
-	if err != nil {
-		panic(err)
-	}
-}
-
 var images = []struct {
 	path string
 	wait bool
@@ -36,16 +19,28 @@ var images = []struct {
 }
 
 func TestCreateInstance(t *testing.T) {
-	file := NewFile(testFilePath)
+	image := NewFile(testFilePath)
 
 	t.Run("x86", func(t *testing.T) {
-		inst, err := CreateInstance(testLDRx86, 32, file, nil)
+		inst, err := CreateInstance("386", image, nil)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
 
 	t.Run("x64", func(t *testing.T) {
-		inst, err := CreateInstance(testLDRx64, 64, file, nil)
+		inst, err := CreateInstance("amd64", image, nil)
+		require.NoError(t, err)
+		require.NotNil(t, inst)
+	})
+
+	t.Run("custom template", func(t *testing.T) {
+		template, err := os.ReadFile("../dist/PELoader_x86.bin")
+		require.NoError(t, err)
+		opts := Options{
+			Template: template,
+		}
+
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -55,7 +50,7 @@ func TestCreateInstance(t *testing.T) {
 			CommandLine: "-p1 123 -p2 \"hello\"",
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -66,7 +61,7 @@ func TestCreateInstance(t *testing.T) {
 			CommandLine: "-p1 123 -p2 \"hello\"",
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -76,7 +71,7 @@ func TestCreateInstance(t *testing.T) {
 			WaitMain: true,
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -86,7 +81,7 @@ func TestCreateInstance(t *testing.T) {
 			AllowSkipDLL: true,
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -96,7 +91,7 @@ func TestCreateInstance(t *testing.T) {
 			IgnoreStdIO: true,
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -106,7 +101,7 @@ func TestCreateInstance(t *testing.T) {
 			NotStopRuntime: true,
 		}
 
-		inst, err := CreateInstance(testLDRx86, 32, file, &opts)
+		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
 	})
@@ -114,15 +109,15 @@ func TestCreateInstance(t *testing.T) {
 	t.Run("invalid image config", func(t *testing.T) {
 		embed := NewEmbed([]byte{0x00})
 
-		inst, err := CreateInstance(testLDRx86, 32, embed, nil)
+		inst, err := CreateInstance("386", embed, nil)
 		errStr := "invalid embed mode config: invalid PE image: EOF"
 		require.EqualError(t, err, errStr)
 		require.Nil(t, inst)
 	})
 
 	t.Run("invalid architecture", func(t *testing.T) {
-		inst, err := CreateInstance(testLDRx86, 12, file, nil)
-		require.EqualError(t, err, "invalid architecture: 12")
+		inst, err := CreateInstance("123", image, nil)
+		require.EqualError(t, err, "invalid architecture: 123")
 		require.Nil(t, inst)
 	})
 }
