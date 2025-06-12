@@ -16,44 +16,27 @@ import (
 
 // Instance contains the allocated memory page and pipe.
 type Instance struct {
-	instAddress uintptr
+	*PELoaderM
+
+	instAddr uintptr
+	instData []byte
 
 	stdInputFile  io.WriteCloser
 	stdOutputFile io.ReadCloser
 	stdErrorFile  io.ReadCloser
-
-	PELoaderM
-}
-
-func (inst *Instance) Restart() error {
-	return nil
-}
-
-// Free is used to destroy instance and free memory page about it.
-func (inst *Instance) Free() error {
-	err := inst.Destroy()
-	if err != nil {
-		return err
-	}
-	err = windows.VirtualFree(inst.instAddress, 0, windows.MEM_RELEASE)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
-// If Options.WaitMain is true, the returned PELoaderM is always nil.
-func LoadInMemoryEXE(template, image []byte, opts *Options) (*PELoaderM, error) {
-	return loadInstance(template, image, opts, false)
+func LoadInMemoryEXE(image []byte, opts *Options) (*Instance, error) {
+	return loadInstance(image, opts, false)
 }
 
 // LoadInMemoryDLL is used to load an unmanaged dll image to memory.
-func LoadInMemoryDLL(template, image []byte, opts *Options) (*PELoaderM, error) {
-	return loadInstance(template, image, opts, true)
+func LoadInMemoryDLL(image []byte, opts *Options) (*Instance, error) {
+	return loadInstance(image, opts, true)
 }
 
-func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM, error) {
+func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	peFile, err := pe.NewFile(bytes.NewReader(image))
 	if err != nil {
 		return nil, err
@@ -61,19 +44,62 @@ func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM
 	if isDLL && (peFile.Characteristics&pe.IMAGE_FILE_DLL) == 0 {
 		return nil, errors.New("pe image is not a dll")
 	}
-	var arch int
+	var arch string
 	switch peFile.Machine {
-	case pe.IMAGE_FILE_MACHINE_AMD64:
-		arch = 64
 	case pe.IMAGE_FILE_MACHINE_I386:
-		arch = 32
+		arch = "386"
+	case pe.IMAGE_FILE_MACHINE_AMD64:
+		arch = "amd64"
 	default:
 		return nil, errors.New("unknown pe image architecture type")
 	}
 	if opts == nil {
 		opts = new(Options)
 	}
+	options := *opts
 	// process pipe
+	instance := Instance{}
+	err = instance.startPipe(&options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start pipe: %s", err)
+	}
+	// overwrite options for control instance
+	options.WaitMain = false
+	options.NotStopRuntime = true
+	options.Runtime.NotAdjustProtect = true
+	options.Runtime.TrackCurrentThread = false
+	// create instance
+	inst, err := CreateInstance(arch, NewEmbed(image), &options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create instance: %s", err)
+	}
+	// prepare memory page for write instance
+	size := uintptr(len(inst))
+	mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
+	mProtect := uint32(windows.PAGE_READWRITE)
+	instAddr, err := windows.VirtualAlloc(0, size, mType, mProtect)
+	if err != nil {
+		return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
+	}
+	var old uint32
+	err = windows.VirtualProtect(instAddr, size, windows.PAGE_EXECUTE_READWRITE, &old)
+	if err != nil {
+		return nil, fmt.Errorf("failed to change memory protect: %s", err)
+	}
+	instData := unsafe.Slice((*byte)(unsafe.Pointer(instAddr)), size) // #nosec
+	copy(instData, inst)
+	// load instance
+	ptr, _, err := syscall.SyscallN(instAddr)
+	if ptr == null {
+		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
+	}
+	instance.PELoaderM = NewPELoader(ptr)
+	instance.instAddr = instAddr
+	instance.instData = instData
+	return &instance, nil
+}
+
+func (inst *Instance) startPipe(options *Options) error {
 	// var (
 	// 	stdInput  = opts.StdInput
 	// 	stdOutput = opts.StdOutput
@@ -108,41 +134,38 @@ func loadInstance(template, image []byte, opts *Options, isDLL bool) (*PELoaderM
 	// 	stdError = uint64(w.Fd())
 	// 	stdErrorFile = r
 	// }
-	// overwrite options for control instance
-	options := *opts
-	options.WaitMain = false
 
 	// options.StdInput
 	// options.StdOutput
 	// options.StdError
+	return nil
+}
 
-	options.NotStopRuntime = true
-	options.Runtime.NotAdjustProtect = true
-	options.Runtime.TrackCurrentThread = false
-	// create instance
-	instance, err := CreateInstance(template, arch, NewEmbed(image), &options)
+// Restart is used to exit image and start image or execute dll_main.
+func (inst *Instance) Restart() error {
+	err1 := inst.Exit(0)
+	var err2 error
+	if inst.IsDLL {
+		err2 = inst.Execute()
+	} else {
+		err2 = inst.Start()
+	}
+	if err2 != nil {
+		return err2
+	}
+	return err1
+}
+
+// Free is used to destroy instance and free memory page about it.
+func (inst *Instance) Free() error {
+	err := inst.Destroy()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create instance: %s", err)
+		return err
 	}
-	// prepare memory page for write instance
-	size := uintptr(len(instance))
-	mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
-	mProtect := uint32(windows.PAGE_READWRITE)
-	scAddr, err := windows.VirtualAlloc(0, size, mType, mProtect)
+	copy(inst.instData, bytes.Repeat([]byte{0}, len(inst.instData)))
+	err = windows.VirtualFree(inst.instAddr, 0, windows.MEM_RELEASE)
 	if err != nil {
-		return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
+		return err
 	}
-	var old uint32
-	err = windows.VirtualProtect(scAddr, size, windows.PAGE_EXECUTE_READWRITE, &old)
-	if err != nil {
-		return nil, fmt.Errorf("failed to change memory protect: %s", err)
-	}
-	dst := unsafe.Slice((*byte)(unsafe.Pointer(scAddr)), size) // #nosec
-	copy(dst, instance)
-	// load instance
-	ptr, _, err := syscall.SyscallN(scAddr)
-	if ptr == null {
-		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
-	}
-	return NewPELoader(ptr), nil
+	return nil
 }
