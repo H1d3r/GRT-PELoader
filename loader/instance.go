@@ -144,11 +144,12 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("invalid architecture: %s", arch)
 	}
-	// process runtime options and encode arguments
+	// select PE loader template
 	template := opts.Template
 	if template == nil {
 		template = defaultTemplate
 	}
+	// process runtime options and encode arguments
 	template, err = option.Set(template, &opts.Runtime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set runtime option: %s", err)
