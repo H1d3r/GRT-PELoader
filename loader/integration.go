@@ -32,8 +32,6 @@ type Instance struct {
 
 	sameOutErr bool
 	outErrMu   sync.Mutex
-
-	wg sync.WaitGroup
 }
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
@@ -117,7 +115,25 @@ func (inst *Instance) startPipe(options *Options) error {
 	if options.Stdout != nil && options.Stdout == options.Stderr {
 		inst.sameOutErr = true
 	}
-
+	var ok bool
+	defer func() {
+		if !ok {
+			inst.closePipe()
+		}
+	}()
+	err := inst.startStdinPipe(options)
+	if err != nil {
+		return err
+	}
+	err = inst.startStdoutPipe(options)
+	if err != nil {
+		return err
+	}
+	err = inst.startStderrPipe(options)
+	if err != nil {
+		return err
+	}
+	ok = true
 	return nil
 }
 
@@ -132,9 +148,7 @@ func (inst *Instance) startStdinPipe(options *Options) error {
 	options.StdInput = uint64(r.Fd())
 	inst.stdInputR = r
 	inst.stdInputW = w
-	inst.wg.Add(1)
 	go func() {
-		defer inst.wg.Done()
 		_, _ = io.Copy(w, options.Stdin)
 	}()
 	return nil
@@ -151,10 +165,12 @@ func (inst *Instance) startStdoutPipe(options *Options) error {
 	options.StdOutput = uint64(w.Fd())
 	inst.stdOutputR = r
 	inst.stdOutputW = w
-	inst.wg.Add(1)
 	go func() {
-		defer inst.wg.Done()
-		_, _ = io.Copy(options.Stdout, r)
+		if !inst.sameOutErr {
+			_, _ = io.Copy(options.Stdout, r)
+			return
+		}
+		inst.copyPipe(options.Stdout, r)
 	}()
 	return nil
 }
@@ -170,12 +186,49 @@ func (inst *Instance) startStderrPipe(options *Options) error {
 	options.StdError = uint64(w.Fd())
 	inst.stdErrorR = r
 	inst.stdErrorW = w
-	inst.wg.Add(1)
 	go func() {
-		defer inst.wg.Done()
-		_, _ = io.Copy(options.Stderr, r)
+		if !inst.sameOutErr {
+			_, _ = io.Copy(options.Stderr, r)
+			return
+		}
+		inst.copyPipe(options.Stderr, r)
 	}()
 	return nil
+}
+
+func (inst *Instance) copyPipe(dst io.Writer, src io.Reader) {
+	buf := make([]byte, 4096)
+	write := func(n int) error {
+		inst.outErrMu.Lock()
+		defer inst.outErrMu.Unlock()
+		_, err := dst.Write(buf[:n])
+		return err
+	}
+	for {
+		n, err := src.Read(buf)
+		if err != nil {
+			return
+		}
+		err = write(n)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (inst *Instance) closePipe() {
+	if inst.stdInputR != nil {
+		_ = inst.stdInputR.Close()
+		_ = inst.stdInputW.Close()
+	}
+	if inst.stdOutputR != nil {
+		_ = inst.stdOutputR.Close()
+		_ = inst.stdOutputW.Close()
+	}
+	if inst.stdErrorR != nil {
+		_ = inst.stdErrorR.Close()
+		_ = inst.stdErrorW.Close()
+	}
 }
 
 // Restart is used to exit image and start image or execute dll_main.
@@ -204,5 +257,6 @@ func (inst *Instance) Free() error {
 	if err != nil {
 		return err
 	}
+	inst.closePipe()
 	return nil
 }
