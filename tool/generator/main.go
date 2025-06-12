@@ -15,7 +15,7 @@ import (
 var (
 	tplDir string
 	mode   string
-	arch   int
+	arch   string
 	pePath string
 
 	compress  bool
@@ -27,9 +27,9 @@ var (
 )
 
 func init() {
-	flag.StringVar(&tplDir, "tpl", "template", "set shellcode templates directory")
+	flag.StringVar(&tplDir, "tpl", "template", "set custom shellcode templates directory")
 	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
-	flag.IntVar(&arch, "arch", 0, "set shellcode template architecture")
+	flag.StringVar(&arch, "arch", "amd64", "set shellcode template architecture")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
 	flag.BoolVar(&compress, "compress", true, "compress image when use embed mode")
 	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
@@ -51,13 +51,20 @@ func main() {
 		return
 	}
 
-	fmt.Println("load PE Loader templates")
-	ldrX64, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x64.bin")) // #nosec
-	checkError(err)
-	ldrX86, err := os.ReadFile(filepath.Join(tplDir, "PELoader_x86.bin")) // #nosec
-	checkError(err)
+	var (
+		ldrX64 []byte
+		ldrX86 []byte
+	)
+	if tplDir != "" {
+		var err error
+		fmt.Println("load custom PE Loader templates")
+		ldrX64, err = os.ReadFile(filepath.Join(tplDir, "PELoader_x64.bin")) // #nosec
+		checkError(err)
+		ldrX86, err = os.ReadFile(filepath.Join(tplDir, "PELoader_x86.bin")) // #nosec
+		checkError(err)
+	}
 
-	// create image config
+	// create image configuration
 	var image loader.Image
 	switch mode {
 	case "embed":
@@ -68,12 +75,12 @@ func main() {
 		peFile, err := pe.NewFile(bytes.NewReader(peData))
 		checkError(err)
 		switch peFile.Machine {
-		case pe.IMAGE_FILE_MACHINE_AMD64:
-			arch = 64
-			fmt.Println("image architecture: x64")
 		case pe.IMAGE_FILE_MACHINE_I386:
-			arch = 32
+			arch = "386"
 			fmt.Println("image architecture: x86")
+		case pe.IMAGE_FILE_MACHINE_AMD64:
+			arch = "amd64"
+			fmt.Println("image architecture: x64")
 		default:
 			fmt.Println("unknown pe image architecture type")
 			return
@@ -100,25 +107,28 @@ func main() {
 	// select shellcode template
 	var template []byte
 	switch arch {
-	case 32:
+	case "386":
 		template = ldrX86
 		fmt.Println("select template for x86")
-	case 64:
+	case "amd64":
 		template = ldrX64
 		fmt.Println("select template for x64")
 	default:
 		fmt.Println("unknown template architecture")
 		return
 	}
+	if len(template) > 0 {
+		options.Template = template
+	}
 
 	fmt.Println("generate GRT-PELoader from template")
-	inst, err := loader.CreateInstance(template, arch, image, &options)
+	instance, err := loader.CreateInstance(arch, image, &options)
 	checkError(err)
 
 	outPath, err = filepath.Abs(outPath)
 	checkError(err)
 	fmt.Println("save instance to:", outPath)
-	err = os.WriteFile(outPath, inst, 0600)
+	err = os.WriteFile(outPath, instance, 0600)
 	checkError(err)
 
 	fmt.Println("generate shellcode successfully")
