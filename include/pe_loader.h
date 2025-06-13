@@ -45,6 +45,9 @@ typedef struct {
     HANDLE StdOutput;
     HANDLE StdError;
 
+    // not running PE image after load.
+    bool NotAutoRun;
+
     // not stop runtime when call ExitProcess.
     bool NotStopRuntime;
 
