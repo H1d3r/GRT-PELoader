@@ -52,6 +52,7 @@ PELoader_M* Boot()
         .StdInput       = NULL,
         .StdOutput      = NULL,
         .StdError       = NULL,
+        .NotAutoRun     = false,
         .NotStopRuntime = false,
 
         .NotEraseInstruction = options.NotEraseInstruction,
@@ -85,6 +86,10 @@ PELoader_M* Boot()
         runtime->Core.Exit();
         SetLastErrno(err);
         return NULL;
+    }
+    if (config.NotAutoRun)
+    {
+        return loader;
     }
 
     // execute PE image
@@ -206,6 +211,15 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     if (size != sizeof(HANDLE))
     {
         return ERR_INVALID_STD_ERROR;
+    }
+    // load NotAutoRun, it must be true of false
+    if (!runtime->Argument.GetValue(ARG_ID_NOT_AUTO_RUN, &config->NotAutoRun, &size))
+    {
+        return ERR_NOT_FOUND_NOT_AUTO_RUN;
+    }
+    if (size != sizeof(bool))
+    {
+        return ERR_INVALID_NOT_AUTO_RUN;
     }
     // load NotStopRuntime, it must be true of false
     if (!runtime->Argument.GetValue(ARG_ID_NOT_STOP_RUNTIME, &config->NotStopRuntime, &size))
