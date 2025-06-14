@@ -67,6 +67,9 @@ type Options struct {
 	StdOutput uint64
 	StdError  uint64
 
+	// not running PE image after load.
+	NotAutoRun bool
+
 	// not stop runtime when call ExitProcess.
 	NotStopRuntime bool
 
@@ -113,6 +116,7 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 		waitMain       = make([]byte, 1)
 		allowSkipDLL   = make([]byte, 1)
 		ignoreStdIO    = make([]byte, 1)
+		notAutoRun     = make([]byte, 1)
 		notStopRuntime = make([]byte, 1)
 	)
 	for _, item := range [...]struct {
@@ -122,6 +126,7 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 		{data: waitMain, opt: opts.WaitMain},
 		{data: allowSkipDLL, opt: opts.AllowSkipDLL},
 		{data: ignoreStdIO, opt: opts.IgnoreStdIO},
+		{data: notAutoRun, opt: opts.NotAutoRun},
 		{data: notStopRuntime, opt: opts.NotStopRuntime},
 	} {
 		if item.opt {
@@ -164,7 +169,8 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 		{ID: 7, Data: stdInput},
 		{ID: 8, Data: stdOutput},
 		{ID: 9, Data: stdError},
-		{ID: 10, Data: notStopRuntime},
+		{ID: 10, Data: notAutoRun},
+		{ID: 11, Data: notStopRuntime},
 	}
 	stub, err := argument.Encode(args...)
 	if err != nil {
