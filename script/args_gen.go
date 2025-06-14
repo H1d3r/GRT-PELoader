@@ -25,7 +25,8 @@ func main() {
 		{ID: 7, Data: make([]byte, 4)},  // standard input handle
 		{ID: 8, Data: make([]byte, 4)},  // standard output handle
 		{ID: 9, Data: make([]byte, 4)},  // standard error handle
-		{ID: 10, Data: []byte{0x01}},    // not stop runtime
+		{ID: 10, Data: []byte{0x01}},    // not auto run
+		{ID: 11, Data: []byte{0x01}},    // not stop runtime
 	}
 	stub, err := argument.Encode(args...)
 	checkError(err)
@@ -33,8 +34,10 @@ func main() {
 	fmt.Println("============x86============")
 	fmt.Println(dumpBytesHex(stub))
 	fmt.Println("===========================")
-
 	fmt.Println()
+
+	cmdlineA = "test_x64.exe -arg 1234\x00"
+	cmdlineW = stringToUTF16(cmdlineA)
 
 	args = []*argument.Arg{
 		{ID: 1, Data: []byte{0xFF}},     // invalid PE image
@@ -46,7 +49,8 @@ func main() {
 		{ID: 7, Data: make([]byte, 8)},  // standard input handle
 		{ID: 8, Data: make([]byte, 8)},  // standard output handle
 		{ID: 9, Data: make([]byte, 8)},  // standard error handle
-		{ID: 10, Data: []byte{0x01}},    // not stop runtime
+		{ID: 10, Data: []byte{0x01}},    // not auto run
+		{ID: 11, Data: []byte{0x01}},    // not stop runtime
 	}
 	stub, err = argument.Encode(args...)
 	checkError(err)
