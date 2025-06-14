@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -61,19 +62,23 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	default:
 		return nil, errors.New("unknown pe image architecture type")
 	}
+	if arch != runtime.GOARCH {
+		return nil, errors.New("pe image architecture is mismatched")
+	}
 	// copy options for overwrite
 	if opts == nil {
 		opts = new(Options)
 	}
 	options := *opts
-	// process pipe for standard handle
+	// process pipe for set standard handle
 	instance := Instance{}
 	err = instance.startPipe(&options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start pipe: %s", err)
 	}
-	// overwrite options for control instance
+	// overwrite options for modularization
 	options.WaitMain = false
+	options.NotAutoRun = true
 	options.NotStopRuntime = true
 	options.Runtime.NotAdjustProtect = true
 	options.Runtime.TrackCurrentThread = false
@@ -103,6 +108,7 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
 	}
 	instance.PELoaderM = NewPELoader(ptr)
+	// record instance memory address
 	instance.instAddr = instAddr
 	instance.instData = instData
 	return &instance, nil
@@ -229,6 +235,18 @@ func (inst *Instance) closePipe() {
 		_ = inst.stdErrorR.Close()
 		_ = inst.stdErrorW.Close()
 	}
+}
+
+// Run is used to start and wait image or execute dll_main.
+func (inst *Instance) Run() error {
+	if inst.IsDLL {
+		return inst.Execute()
+	}
+	err := inst.Start()
+	if err != nil {
+		return err
+	}
+	return inst.Wait()
 }
 
 // Restart is used to exit image and start image or execute dll_main.
