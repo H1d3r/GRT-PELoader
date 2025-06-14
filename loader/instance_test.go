@@ -96,6 +96,16 @@ func TestCreateInstance(t *testing.T) {
 		require.NotNil(t, inst)
 	})
 
+	t.Run("with auto run", func(t *testing.T) {
+		opts := Options{
+			NotAutoRun: true,
+		}
+
+		inst, err := CreateInstance("386", image, &opts)
+		require.NoError(t, err)
+		require.NotNil(t, inst)
+	})
+
 	t.Run("with not stop runtime", func(t *testing.T) {
 		opts := Options{
 			NotStopRuntime: true,
