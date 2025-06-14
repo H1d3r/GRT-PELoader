@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&tplDir, "tpl", "template", "set custom shellcode templates directory")
+	flag.StringVar(&tplDir, "tpl", "", "set custom shellcode templates directory")
 	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
 	flag.StringVar(&arch, "arch", "amd64", "set shellcode template architecture")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
@@ -39,6 +39,7 @@ func init() {
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
+	flag.BoolVar(&options.NotAutoRun, "nar", false, "not running PE image after load")
 	flag.BoolVar(&options.NotStopRuntime, "nsr", false, "not stop runtime when call ExitProcess")
 	flag.StringVar(&outPath, "o", "output.bin", "set output shellcode file path")
 	option.Flag(&options.Runtime)
@@ -51,6 +52,7 @@ func main() {
 		return
 	}
 
+	// load custom loader template
 	var (
 		ldrX64 []byte
 		ldrX86 []byte
