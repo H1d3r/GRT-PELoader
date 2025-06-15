@@ -57,6 +57,9 @@ type Config struct {
 	StdOutput uintptr
 	StdError  uintptr
 
+	// not running PE image after load.
+	NotAutoRun bool
+
 	// not stop runtime when call ExitProcess.
 	NotStopRuntime bool
 
@@ -84,7 +87,7 @@ type PELoaderM struct {
 	// get export method address if PE image is a DLL.
 	getProc uintptr
 
-	// main thread return value or argument about call ExitProcess.
+	// get main thread return value or argument about call ExitProcess.
 	exitCode uintptr
 
 	// create a thread at EntryPoint, it useless for DLL image.
