@@ -96,7 +96,7 @@ func TestCreateInstance(t *testing.T) {
 		require.NotNil(t, inst)
 	})
 
-	t.Run("with auto run", func(t *testing.T) {
+	t.Run("with not auto run", func(t *testing.T) {
 		opts := Options{
 			NotAutoRun: true,
 		}
