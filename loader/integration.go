@@ -21,8 +21,8 @@ import (
 type Instance struct {
 	*PELoaderM
 
-	instAddr uintptr
-	instData []byte
+	addr uintptr
+	data []byte
 
 	stdInputR  *os.File
 	stdInputW  *os.File
@@ -109,8 +109,8 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	}
 	instance.PELoaderM = NewPELoader(ptr)
 	// record instance memory address
-	instance.instAddr = instAddr
-	instance.instData = instData
+	instance.addr = instAddr
+	instance.data = instData
 	return &instance, nil
 }
 
@@ -182,7 +182,7 @@ func (inst *Instance) startStdoutPipe(options *Options) error {
 }
 
 func (inst *Instance) startStderrPipe(options *Options) error {
-	if options.StdInput != 0 || options.Stdin == nil {
+	if options.StdError != 0 || options.Stderr == nil {
 		return nil
 	}
 	r, w, err := os.Pipe()
@@ -270,8 +270,8 @@ func (inst *Instance) Free() error {
 	if err != nil {
 		return err
 	}
-	copy(inst.instData, bytes.Repeat([]byte{0}, len(inst.instData)))
-	err = windows.VirtualFree(inst.instAddr, 0, windows.MEM_RELEASE)
+	copy(inst.data, bytes.Repeat([]byte{0}, len(inst.data)))
+	err = windows.VirtualFree(inst.addr, 0, windows.MEM_RELEASE)
 	if err != nil {
 		return err
 	}
