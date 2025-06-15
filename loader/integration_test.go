@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func init() {
 	var err error
 	switch runtime.GOARCH {
 	case "386":
-		testImage, err = os.ReadFile("../test/image/x86/msvc.exe")
+		testImage, err = os.ReadFile("../test/image/x86/go.exe")
 	case "amd64":
 		testImage, err = os.ReadFile("../test/image/x64/go.exe")
 	default:
@@ -38,7 +39,10 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		instance, err := LoadInMemoryEXE(testImage, &opts)
 		require.NoError(t, err)
 
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			time.Sleep(5 * time.Second)
 			err = instance.Free()
 			require.NoError(t, err)
@@ -46,21 +50,29 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		err = instance.Run()
 		require.NoError(t, err)
+
+		wg.Wait()
 	})
 
 	t.Run("with different output error", func(t *testing.T) {
+		stdin := new(bytes.Buffer)
 		stdout := new(bytes.Buffer)
 		stderr := new(bytes.Buffer)
 
 		opts := Options{
 			CommandLine: "-kick 20",
-			Stdout:      stdout,
-			Stderr:      stderr,
+
+			Stdin:  stdin,
+			Stdout: stdout,
+			Stderr: stderr,
 		}
 		instance, err := LoadInMemoryEXE(testImage, &opts)
 		require.NoError(t, err)
 
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			time.Sleep(5 * time.Second)
 			err = instance.Free()
 			require.NoError(t, err)
@@ -71,20 +83,28 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		fmt.Println("stdout:\n", stdout)
 		fmt.Println("stderr:\n", stderr)
+
+		wg.Wait()
 	})
 
 	t.Run("with same output error", func(t *testing.T) {
+		stdin := new(bytes.Buffer)
 		output := new(bytes.Buffer)
 
 		opts := Options{
 			CommandLine: "-kick 20",
-			Stdout:      output,
-			Stderr:      output,
+
+			Stdin:  stdin,
+			Stdout: output,
+			Stderr: output,
 		}
 		instance, err := LoadInMemoryEXE(testImage, &opts)
 		require.NoError(t, err)
 
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			time.Sleep(5 * time.Second)
 			err = instance.Free()
 			require.NoError(t, err)
@@ -95,6 +115,8 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		fmt.Println("stdout:\n", output)
 		fmt.Println("stderr:\n", output)
+
+		wg.Wait()
 	})
 
 	t.Run("not wait exit", func(t *testing.T) {
