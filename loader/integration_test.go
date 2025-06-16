@@ -14,17 +14,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testImage []byte
+var (
+	testImageGo   []byte
+	testImageRust []byte
+)
 
 func init() {
 	var err error
 	switch runtime.GOARCH {
 	case "386":
-		testImage, err = os.ReadFile("../test/image/x86/go.exe")
+		testImageGo, err = os.ReadFile("../test/image/x86/go.exe")
 	case "amd64":
-		testImage, err = os.ReadFile("../test/image/x64/go.exe")
-	default:
-		panic("unsupported architecture")
+		testImageGo, err = os.ReadFile("../test/image/x64/go.exe")
+	}
+	if err != nil {
+		panic(err)
+	}
+	switch runtime.GOARCH {
+	case "386":
+		testImageRust, err = os.ReadFile("../test/image/x86/rust_msvc.exe")
+	case "amd64":
+		testImageRust, err = os.ReadFile("../test/image/x64/rust_msvc.exe")
 	}
 	if err != nil {
 		panic(err)
@@ -36,7 +46,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		opts := Options{
 			CommandLine: "-kick 20",
 		}
-		instance, err := LoadInMemoryEXE(testImage, &opts)
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		wg := sync.WaitGroup{}
@@ -44,7 +54,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(5 * time.Second)
-			err = instance.Free()
+			err := instance.Free()
 			require.NoError(t, err)
 		}()
 
@@ -66,7 +76,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 			Stdout: stdout,
 			Stderr: stderr,
 		}
-		instance, err := LoadInMemoryEXE(testImage, &opts)
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		wg := sync.WaitGroup{}
@@ -74,7 +84,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(5 * time.Second)
-			err = instance.Free()
+			err := instance.Free()
 			require.NoError(t, err)
 		}()
 
@@ -98,7 +108,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 			Stdout: output,
 			Stderr: output,
 		}
-		instance, err := LoadInMemoryEXE(testImage, &opts)
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		wg := sync.WaitGroup{}
@@ -106,7 +116,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			time.Sleep(5 * time.Second)
-			err = instance.Free()
+			err := instance.Free()
 			require.NoError(t, err)
 		}()
 
@@ -121,57 +131,51 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 	t.Run("not wait exit", func(t *testing.T) {
 		opts := Options{
-			CommandLine:    "-kick 20",
-			WaitMain:       false,
-			NotStopRuntime: true,
+			CommandLine: "-kick 20",
 		}
-		PELoaderM, err := LoadInMemoryEXE(testImage, &opts)
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		time.Sleep(4 * time.Second)
 
-		err = PELoaderM.Exit(0)
+		err = instance.Exit(0)
 		require.NoError(t, err)
-		require.Zero(t, PELoaderM.ExitCode())
+		require.Zero(t, instance.ExitCode())
 
-		err = PELoaderM.Execute()
+		err = instance.Execute()
 		require.NoError(t, err)
 
 		time.Sleep(2 * time.Second)
 
-		err = PELoaderM.Destroy()
+		err = instance.Destroy()
 		require.NoError(t, err)
 	})
 
 	t.Run("restart", func(t *testing.T) {
 		opts := Options{
-			CommandLine:    "-kick 20",
-			WaitMain:       false,
-			NotStopRuntime: true,
+			CommandLine: "-kick 20",
 		}
-		PELoaderM, err := LoadInMemoryEXE(testImage, &opts)
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		time.Sleep(2 * time.Second)
 
-		err = PELoaderM.Exit(0)
+		err = instance.Exit(0)
 		require.NoError(t, err)
-		require.Zero(t, PELoaderM.ExitCode())
-
-		time.Sleep(time.Hour)
+		require.Zero(t, instance.ExitCode())
 
 		for i := 0; i < 3; i++ {
-			err = PELoaderM.Execute()
+			err = instance.Execute()
 			require.NoError(t, err)
 
 			time.Sleep(2 * time.Second)
 
-			err = PELoaderM.Exit(uint(i) + 123)
+			err = instance.Exit(uint(i) + 123)
 			require.NoError(t, err)
-			require.Equal(t, uint(i)+123, PELoaderM.ExitCode())
+			require.Equal(t, uint(i)+123, instance.ExitCode())
 		}
 
-		err = PELoaderM.Destroy()
+		err = instance.Destroy()
 		require.NoError(t, err)
 	})
 }
