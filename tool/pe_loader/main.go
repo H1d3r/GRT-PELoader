@@ -31,7 +31,7 @@ func init() {
 	flag.DurationVar(&wait, "wait", 5*time.Second, "wait time after call DllMain for DLL")
 	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
-	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
+	flag.BoolVar(&options.WaitMain, "wm", false, "wait for shellcode to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
 	flag.BoolVar(&options.NotStopRuntime, "nsr", false, "not stop runtime when call ExitProcess")
@@ -47,6 +47,7 @@ func main() {
 
 	fmt.Println("[WARNING]")
 	fmt.Println("This program is only for test PE image is compatible")
+	fmt.Println()
 
 	// load custom loader template
 	var (
@@ -89,18 +90,22 @@ func main() {
 	switch arch {
 	case "386":
 		template = ldrX86
-		fmt.Println("select template for x86")
 	case "amd64":
 		template = ldrX64
-		fmt.Println("select template for x64")
-	default:
-		fmt.Println("unknown template architecture")
-		return
 	}
 	if len(template) > 0 {
 		options.Template = template
 	}
 
+	// process empty command line
+	if options.ImageName == "" {
+		options.ImageName = filepath.Base(pePath)
+	}
+	if options.CommandLine == "" {
+		options.CommandLine = " "
+	}
+
+	fmt.Println("load PE image to memory")
 	var instance *loader.Instance
 	if peFile.Characteristics&pe.IMAGE_FILE_DLL == 0 {
 		instance, err = loader.LoadInMemoryEXE(peData, &options)
@@ -108,17 +113,19 @@ func main() {
 		instance, err = loader.LoadInMemoryDLL(peData, &options)
 	}
 	checkError(err)
+
+	fmt.Println("PE image is running")
 	err = instance.Run()
 	checkError(err)
 
 	if proc != "" {
+		fmt.Println("call export procedure")
 		p, err := instance.GetProcAddress(proc)
 		checkError(err)
 		ret, _, err := syscall.SyscallN(p)
 		fmt.Println("return value:", ret)
 		fmt.Println(err)
 	}
-
 	if instance.IsDLL {
 		fmt.Println("DllMain is running")
 		time.Sleep(wait)
@@ -126,7 +133,8 @@ func main() {
 
 	err = instance.Free()
 	checkError(err)
-	fmt.Println("free instance")
+	fmt.Println()
+	fmt.Println("free instance successfully")
 }
 
 func checkError(err error) {
