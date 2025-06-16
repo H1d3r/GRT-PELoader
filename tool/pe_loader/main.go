@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
+	"time"
 
 	"github.com/RSSU-Shellcode/GRT-Develop/option"
 	"github.com/RSSU-Shellcode/GRT-PELoader/loader"
@@ -15,6 +18,8 @@ import (
 var (
 	tplDir string
 	pePath string
+	proc   string
+	wait   time.Duration
 
 	options loader.Options
 )
@@ -22,6 +27,8 @@ var (
 func init() {
 	flag.StringVar(&tplDir, "tpl", "", "set custom shellcode templates directory")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
+	flag.StringVar(&proc, "proc", "", "call the export procedure without argument for test")
+	flag.DurationVar(&wait, "wait", 5*time.Second, "wait time after call DllMain for DLL")
 	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
@@ -72,8 +79,12 @@ func main() {
 		fmt.Println("unknown pe image architecture type")
 		return
 	}
+	if arch != runtime.GOARCH {
+		fmt.Println("PE image architecture is mismatched")
+		return
+	}
 
-	// select shellcode template
+	// select custom shellcode template
 	var template []byte
 	switch arch {
 	case "386":
@@ -90,13 +101,32 @@ func main() {
 		options.Template = template
 	}
 
+	var instance *loader.Instance
 	if peFile.Characteristics&pe.IMAGE_FILE_DLL == 0 {
-		instance, err := loader.LoadInMemoryEXE(peData, &options)
-		checkError(err)
+		instance, err = loader.LoadInMemoryEXE(peData, &options)
 	} else {
-		instance, err := loader.LoadInMemoryDLL(peData, &options)
-		checkError(err)
+		instance, err = loader.LoadInMemoryDLL(peData, &options)
 	}
+	checkError(err)
+	err = instance.Run()
+	checkError(err)
+
+	if proc != "" {
+		p, err := instance.GetProcAddress(proc)
+		checkError(err)
+		ret, _, err := syscall.SyscallN(p)
+		fmt.Println("return value:", ret)
+		fmt.Println(err)
+	}
+
+	if instance.IsDLL {
+		fmt.Println("DllMain is running")
+		time.Sleep(wait)
+	}
+
+	err = instance.Free()
+	checkError(err)
+	fmt.Println("free instance")
 }
 
 func checkError(err error) {
