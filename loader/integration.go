@@ -102,15 +102,16 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	}
 	instData := unsafe.Slice((*byte)(unsafe.Pointer(instAddr)), size) // #nosec
 	copy(instData, inst)
-	// load instance
-	ptr, _, err := syscall.SyscallN(instAddr)
-	if ptr == null {
-		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
-	}
-	instance.PELoaderM = NewPELoader(ptr)
 	// record instance memory address
 	instance.addr = instAddr
 	instance.data = instData
+	// load instance
+	ptr, _, err := syscall.SyscallN(instAddr)
+	if ptr == null {
+		_ = instance.freeInstance()
+		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
+	}
+	instance.PELoaderM = NewPELoader(ptr)
 	return &instance, nil
 }
 
@@ -270,8 +271,12 @@ func (inst *Instance) Free() error {
 	if err != nil {
 		return err
 	}
+	return inst.freeInstance()
+}
+
+func (inst *Instance) freeInstance() error {
 	copy(inst.data, bytes.Repeat([]byte{0}, len(inst.data)))
-	err = windows.VirtualFree(inst.addr, 0, windows.MEM_RELEASE)
+	err := windows.VirtualFree(inst.addr, 0, windows.MEM_RELEASE)
 	if err != nil {
 		return err
 	}
