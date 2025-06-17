@@ -106,12 +106,8 @@ func main() {
 	}
 
 	fmt.Println("load PE image to memory")
-	var instance *loader.Instance
-	if peFile.Characteristics&pe.IMAGE_FILE_DLL == 0 {
-		instance, err = loader.LoadInMemoryEXE(peData, &options)
-	} else {
-		instance, err = loader.LoadInMemoryDLL(peData, &options)
-	}
+	image := loader.NewFile(pePath)
+	instance, err := loader.LoadInMemoryImage(image, arch, &options)
 	checkError(err)
 
 	fmt.Println("PE image is running")
