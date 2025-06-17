@@ -346,6 +346,8 @@ static errno eraseArguments(Runtime_M* runtime)
         ARG_ID_STD_INPUT,
         ARG_ID_STD_OUTPUT,
         ARG_ID_STD_ERROR,
+        ARG_ID_NOT_AUTO_RUN,
+        ARG_ID_NOT_STOP_RUNTIME,
     };
     bool success = true;
     for (int i = 0; i < arrlen(id); i++)
