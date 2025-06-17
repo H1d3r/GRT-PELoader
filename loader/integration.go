@@ -37,15 +37,15 @@ type Instance struct {
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
 func LoadInMemoryEXE(image []byte, opts *Options) (*Instance, error) {
-	return loadInstance(image, opts, false)
+	return loadInMemoryImage(image, opts, false)
 }
 
 // LoadInMemoryDLL is used to load an unmanaged dll image to memory.
 func LoadInMemoryDLL(image []byte, opts *Options) (*Instance, error) {
-	return loadInstance(image, opts, true)
+	return loadInMemoryImage(image, opts, true)
 }
 
-func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
+func loadInMemoryImage(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	peFile, err := pe.NewFile(bytes.NewReader(image))
 	if err != nil {
 		return nil, err
@@ -65,6 +65,11 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	if arch != runtime.GOARCH {
 		return nil, errors.New("pe image architecture is mismatched")
 	}
+	return LoadInMemoryImage(NewEmbed(image), arch, opts)
+}
+
+// LoadInMemoryImage is used to load unmanaged pe image to memory.
+func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, error) {
 	// copy options for overwrite
 	if opts == nil {
 		opts = new(Options)
@@ -72,7 +77,7 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	options := *opts
 	// process pipe for set standard handle
 	instance := Instance{}
-	err = instance.startPipe(&options)
+	err := instance.startPipe(&options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start pipe: %s", err)
 	}
@@ -83,7 +88,7 @@ func loadInstance(image []byte, opts *Options, isDLL bool) (*Instance, error) {
 	options.Runtime.NotAdjustProtect = true
 	options.Runtime.TrackCurrentThread = false
 	// create instance
-	inst, err := CreateInstance(arch, NewEmbed(image), &options)
+	inst, err := CreateInstance(arch, image, &options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create instance: %s", err)
 	}
