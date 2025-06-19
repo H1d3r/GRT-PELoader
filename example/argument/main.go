@@ -33,7 +33,7 @@ func getValue() {
 	var size uint32
 	ret, _, _ := GetValue.Call(
 		uintptr(id), 0, uintptr(unsafe.Pointer(&size)),
-	)
+	) // #nosec
 	if ret == 0 {
 		log.Fatalln("invalid argument id")
 	}
@@ -41,7 +41,7 @@ func getValue() {
 	value := make([]byte, size)
 	ret, _, _ = GetValue.Call(
 		uintptr(id), uintptr(unsafe.Pointer(&value[0])), 0,
-	)
+	) // #nosec
 	if ret == 0 {
 		log.Fatalln("invalid argument id")
 	}
@@ -62,7 +62,7 @@ func getPointer() {
 	ret, _, _ := GetPointer.Call(
 		uintptr(id), uintptr(unsafe.Pointer(&pointer)),
 		uintptr(unsafe.Pointer(&size)),
-	)
+	) // #nosec
 	if ret == 0 {
 		log.Fatalln("invalid argument id")
 	}
@@ -70,7 +70,7 @@ func getPointer() {
 	fmt.Println("pointer:", pointer)
 	fmt.Println("size:", size)
 
-	arg := unsafe.Slice(pointer, size)
+	arg := unsafe.Slice(pointer, size) // #nosec
 	fmt.Println("data:", string(arg))
 	fmt.Println("raw:", arg)
 }
