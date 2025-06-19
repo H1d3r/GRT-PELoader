@@ -111,6 +111,8 @@ func main() {
 	checkError(err)
 
 	fmt.Println("PE image is running")
+	fmt.Println("================================")
+
 	err = instance.Run()
 	checkError(err)
 
@@ -129,8 +131,9 @@ func main() {
 
 	err = instance.Free()
 	checkError(err)
-	fmt.Println()
+	fmt.Println("================================")
 	fmt.Println("free instance successfully")
+	fmt.Println()
 }
 
 func checkError(err error) {
