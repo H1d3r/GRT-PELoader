@@ -115,6 +115,8 @@ static PELoader* getPELoaderPointer();
 
 static bool ldr_lock();
 static bool ldr_unlock();
+static bool ldr_lock_status();
+static bool ldr_unlock_status();
 
 static void* allocPELoaderMemPage(PELoader_Cfg* config);
 static bool  initPELoaderAPI(PELoader* loader);
@@ -141,8 +143,6 @@ static errno cleanPELoader(PELoader* loader);
 static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName);
 static errno ldr_init_mutex();
-static bool  ldr_lock_status();
-static bool  ldr_unlock_status();
 static bool  ldr_copy_image();
 static void* ldr_process_export(LPSTR name);
 static bool  ldr_process_import();
@@ -1054,6 +1054,31 @@ static bool ldr_unlock()
 }
 
 __declspec(noinline)
+static bool ldr_lock_status()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (loader->StatusMu == NULL)
+    {
+        return true;
+    }
+    DWORD event = loader->WaitForSingleObject(loader->StatusMu, INFINITE);
+    return event == WAIT_OBJECT_0 || event == WAIT_ABANDONED;
+}
+
+__declspec(noinline)
+static bool ldr_unlock_status()
+{
+    PELoader* loader = getPELoaderPointer();
+
+    if (loader->StatusMu == NULL)
+    {
+        return true;
+    }
+    return loader->ReleaseMutex(loader->StatusMu);
+}
+
+__declspec(noinline)
 void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
     PELoader* loader = getPELoaderPointer();
@@ -1231,23 +1256,6 @@ static errno ldr_init_mutex()
     }
 #endif // NO_RUNTIME
     return NO_ERROR;
-}
-
-__declspec(noinline)
-static bool ldr_lock_status()
-{
-    PELoader* loader = getPELoaderPointer();
-
-    DWORD event = loader->WaitForSingleObject(loader->StatusMu, INFINITE);
-    return event == WAIT_OBJECT_0 || event == WAIT_ABANDONED;
-}
-
-__declspec(noinline)
-static bool ldr_unlock_status()
-{
-    PELoader* loader = getPELoaderPointer();
-
-    return loader->ReleaseMutex(loader->StatusMu);
 }
 
 static bool ldr_copy_image()
