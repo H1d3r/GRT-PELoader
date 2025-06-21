@@ -3,6 +3,7 @@ package loader
 import (
 	"embed"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -75,6 +76,10 @@ type Options struct {
 
 	// set Gleam-RT options, usually keep the default value.
 	Runtime option.Options
+
+	// set additional arguments for upper PE image.
+	// all the ID must greater than 64.
+	Arguments []*argument.Arg
 
 	// for interactive with go program.
 	Stdin  io.Reader
@@ -171,6 +176,13 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 		{ID: 9, Data: stdError},
 		{ID: 10, Data: notAutoRun},
 		{ID: 11, Data: notStopRuntime},
+	}
+	// process additional arguments
+	for _, arg := range opts.Arguments {
+		if arg.ID <= 64 {
+			return nil, errors.New("additional argument must greater than 64")
+		}
+		args = append(args, arg)
 	}
 	stub, err := argument.Encode(args...)
 	if err != nil {
