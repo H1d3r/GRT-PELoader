@@ -26,7 +26,7 @@ func main() {
 	var data syscall.WSAData
 	ret, _, _ := syscall.SyscallN(
 		WSAStartup, uintptr(0x202), uintptr(unsafe.Pointer(&data)),
-	)
+	) // #nosec
 	fmt.Println(ret)
 	spew.Dump(data)
 
