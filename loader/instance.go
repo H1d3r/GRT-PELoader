@@ -180,7 +180,7 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	// process additional arguments
 	for _, arg := range opts.Arguments {
 		if arg.ID <= 64 {
-			return nil, errors.New("additional argument must greater than 64")
+			return nil, errors.New("additional argument id must greater than 64")
 		}
 		args = append(args, arg)
 	}

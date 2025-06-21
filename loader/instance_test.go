@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/RSSU-Shellcode/GRT-Develop/argument"
 )
 
 var images = []struct {
@@ -114,6 +116,34 @@ func TestCreateInstance(t *testing.T) {
 		inst, err := CreateInstance("386", image, &opts)
 		require.NoError(t, err)
 		require.NotNil(t, inst)
+	})
+
+	t.Run("with additional arguments", func(t *testing.T) {
+		t.Run("common", func(t *testing.T) {
+			args := []*argument.Arg{
+				{ID: 100, Data: []byte("config data")},
+			}
+			opts := Options{
+				Arguments: args,
+			}
+
+			inst, err := CreateInstance("386", image, &opts)
+			require.NoError(t, err)
+			require.NotNil(t, inst)
+		})
+
+		t.Run("invalid id", func(t *testing.T) {
+			args := []*argument.Arg{
+				{ID: 1, Data: []byte("config data")},
+			}
+			opts := Options{
+				Arguments: args,
+			}
+
+			inst, err := CreateInstance("386", image, &opts)
+			require.Error(t, err, "additional argument id must greater than 64")
+			require.Nil(t, inst)
+		})
 	})
 
 	t.Run("invalid image config", func(t *testing.T) {
