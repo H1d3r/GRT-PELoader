@@ -113,7 +113,7 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	// load instance
 	ptr, _, err := syscall.SyscallN(instAddr)
 	if ptr == null {
-		_ = instance.freeInstance()
+		_ = instance.free()
 		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
 	}
 	instance.PELoaderM = NewPELoader(ptr)
@@ -276,10 +276,10 @@ func (inst *Instance) Free() error {
 	if err != nil {
 		return err
 	}
-	return inst.freeInstance()
+	return inst.free()
 }
 
-func (inst *Instance) freeInstance() error {
+func (inst *Instance) free() error {
 	copy(inst.data, bytes.Repeat([]byte{0}, len(inst.data)))
 	err := windows.VirtualFree(inst.addr, 0, windows.MEM_RELEASE)
 	if err != nil {
