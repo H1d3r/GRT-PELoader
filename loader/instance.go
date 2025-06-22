@@ -81,10 +81,13 @@ type Options struct {
 	// all the ID must greater than 64.
 	Arguments []*argument.Arg
 
-	// for interactive with go program.
+	// for interactive with current program.
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+
+	// if this program is running on GleamRT, must enable it.
+	OnRuntime bool
 }
 
 // CreateInstance is used to create instance from PE Loader template.
