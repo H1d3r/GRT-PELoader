@@ -17,6 +17,12 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+var (
+	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
+
+	procVirtualAllocEx = modKernel32.NewProc("VirtualAllocEx")
+)
+
 // Instance contains the allocated memory page and pipe.
 type Instance struct {
 	*PELoaderM
@@ -92,20 +98,32 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to create instance: %s", err)
 	}
-	// prepare memory page for write instance
 	size := uintptr(len(inst))
-	mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
-	mProtect := uint32(windows.PAGE_READWRITE)
-	instAddr, err := windows.VirtualAlloc(0, size, mType, mProtect)
-	if err != nil {
-		return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
+	// prepare memory page for write instance
+	var instAddr uintptr
+	if opts.OnRuntime {
+		// use VirtualAllocEx for let GleamRT not track these pages
+		hProcess := uintptr(windows.CurrentProcess())
+		mType := uintptr(windows.MEM_COMMIT | windows.MEM_RESERVE)
+		mProtect := uintptr(windows.PAGE_READWRITE)
+		instAddr, _, err = procVirtualAllocEx.Call(hProcess, 0, size, mType, mProtect)
+		if instAddr == 0 {
+			return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
+		}
+	} else {
+		mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
+		mProtect := uint32(windows.PAGE_READWRITE)
+		instAddr, err = windows.VirtualAlloc(0, size, mType, mProtect)
+		if err != nil {
+			return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
+		}
 	}
 	var old uint32
 	err = windows.VirtualProtect(instAddr, size, windows.PAGE_EXECUTE_READWRITE, &old)
 	if err != nil {
 		return nil, fmt.Errorf("failed to change memory protect: %s", err)
 	}
-	instData := unsafe.Slice((*byte)(unsafe.Pointer(instAddr)), size) // #nosec
+	instData := unsafe.Slice((*byte)(unsafe.Pointer(instAddr)), len(inst)) // #nosec
 	copy(instData, inst)
 	// record instance memory address
 	instance.addr = instAddr
