@@ -188,6 +188,29 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		err = instance.Free()
 		require.NoError(t, err)
 	})
+
+	t.Run("running on runtime", func(t *testing.T) {
+		opts := Options{
+			CommandLine: "-kick 20",
+			OnRuntime:   true,
+		}
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
+		require.NoError(t, err)
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(5 * time.Second)
+			err := instance.Free()
+			require.NoError(t, err)
+		}()
+
+		err = instance.Run()
+		require.NoError(t, err)
+
+		wg.Wait()
+	})
 }
 
 func TestLoadInMemoryDLL(t *testing.T) {
