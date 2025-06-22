@@ -141,7 +141,8 @@ func TestCreateInstance(t *testing.T) {
 			}
 
 			inst, err := CreateInstance("386", image, &opts)
-			require.Error(t, err, "additional argument id must greater than 64")
+			errStr := "additional argument id must greater than 64"
+			require.EqualError(t, err, errStr)
 			require.Nil(t, inst)
 		})
 	})
@@ -158,6 +159,32 @@ func TestCreateInstance(t *testing.T) {
 	t.Run("invalid architecture", func(t *testing.T) {
 		inst, err := CreateInstance("123", image, nil)
 		require.EqualError(t, err, "invalid architecture: 123")
+		require.Nil(t, inst)
+	})
+
+	t.Run("invalid template", func(t *testing.T) {
+		opts := Options{
+			Template: []byte{0x00},
+		}
+
+		inst, err := CreateInstance("386", image, &opts)
+		errStr := "failed to set runtime option: invalid runtime shellcode template"
+		require.EqualError(t, err, errStr)
+		require.Nil(t, inst)
+	})
+
+	t.Run("appear the same argument id", func(t *testing.T) {
+		args := []*argument.Arg{
+			{ID: 100, Data: []byte("config data 1")},
+			{ID: 100, Data: []byte("config data 2")},
+		}
+		opts := Options{
+			Arguments: args,
+		}
+
+		inst, err := CreateInstance("386", image, &opts)
+		errStr := "failed to encode argument: argument id 100 is already exists"
+		require.EqualError(t, err, errStr)
 		require.Nil(t, inst)
 	})
 }
