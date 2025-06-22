@@ -17,6 +17,7 @@ import (
 var (
 	testImageGo   []byte
 	testImageRust []byte
+	testImageCPP  []byte
 )
 
 func init() {
@@ -36,6 +37,10 @@ func init() {
 	case "amd64":
 		testImageRust, err = os.ReadFile("../test/image/x64/rust_msvc.exe")
 	}
+	if err != nil {
+		panic(err)
+	}
+	testImageCPP, err = os.ReadFile("C:\\Windows\\System32\\ws2_32.dll")
 	if err != nil {
 		panic(err)
 	}
@@ -141,7 +146,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		time.Sleep(2 * time.Second)
 
-		err = instance.Destroy()
+		err = instance.Free()
 		require.NoError(t, err)
 	})
 
@@ -161,7 +166,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		time.Sleep(2 * time.Second)
 
-		err = instance.Destroy()
+		err = instance.Free()
 		require.NoError(t, err)
 	})
 
@@ -180,11 +185,51 @@ func TestLoadInMemoryEXE(t *testing.T) {
 			require.Equal(t, uint(i)+123, instance.ExitCode())
 		}
 
-		err = instance.Destroy()
+		err = instance.Free()
 		require.NoError(t, err)
 	})
 }
 
 func TestLoadInMemoryDLL(t *testing.T) {
+	t.Run("common", func(t *testing.T) {
+		opts := Options{
+			AllowSkipDLL: true,
+		}
+		instance, err := LoadInMemoryDLL(testImageCPP, &opts)
+		require.NoError(t, err)
 
+		err = instance.Run()
+		require.NoError(t, err)
+
+		WSAStartup, err := instance.GetProcAddress("WSAStartup")
+		require.NoError(t, err)
+		require.NotZero(t, WSAStartup)
+
+		err = instance.Free()
+		require.NoError(t, err)
+	})
+
+	t.Run("restart", func(t *testing.T) {
+		opts := Options{
+			AllowSkipDLL: true,
+		}
+		instance, err := LoadInMemoryDLL(testImageCPP, &opts)
+		require.NoError(t, err)
+
+		for i := 0; i < 3; i++ {
+			err = instance.Restart()
+			require.NoError(t, err)
+
+			WSAStartup, err := instance.GetProcAddress("WSAStartup")
+			require.NoError(t, err)
+			require.NotZero(t, WSAStartup)
+
+			err = instance.Exit(uint(i) + 123)
+			require.NoError(t, err)
+			require.Equal(t, uint(i)+123, instance.ExitCode())
+		}
+
+		err = instance.Free()
+		require.NoError(t, err)
+	})
 }
