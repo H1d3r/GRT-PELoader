@@ -136,13 +136,27 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
-		time.Sleep(4 * time.Second)
+		err = instance.Start()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+
+		err = instance.Destroy()
+		require.NoError(t, err)
+	})
+
+	t.Run("exit before start", func(t *testing.T) {
+		opts := Options{
+			CommandLine: "-kick 20",
+		}
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
+		require.NoError(t, err)
 
 		err = instance.Exit(0)
 		require.NoError(t, err)
 		require.Zero(t, instance.ExitCode())
 
-		err = instance.Execute()
+		err = instance.Start()
 		require.NoError(t, err)
 
 		time.Sleep(2 * time.Second)
@@ -152,20 +166,11 @@ func TestLoadInMemoryEXE(t *testing.T) {
 	})
 
 	t.Run("restart", func(t *testing.T) {
-		opts := Options{
-			CommandLine: "-kick 20",
-		}
-		instance, err := LoadInMemoryEXE(testImageGo, &opts)
+		instance, err := LoadInMemoryEXE(testImageRust, nil)
 		require.NoError(t, err)
-
-		time.Sleep(2 * time.Second)
-
-		err = instance.Exit(0)
-		require.NoError(t, err)
-		require.Zero(t, instance.ExitCode())
 
 		for i := 0; i < 3; i++ {
-			err = instance.Execute()
+			err = instance.Restart()
 			require.NoError(t, err)
 
 			time.Sleep(2 * time.Second)
