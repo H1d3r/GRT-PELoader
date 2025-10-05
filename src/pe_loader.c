@@ -7,7 +7,6 @@
 #include "lib_memory.h"
 #include "lib_string.h"
 #include "rel_addr.h"
-#include "hash_api.h"
 #include "pe_image.h"
 #include "win_api.h"
 #include "random.h"
@@ -22,6 +21,9 @@ typedef struct {
     // store config from argument
     Runtime_M*   Runtime;
     PELoader_Cfg Config;
+
+    // process environment
+    void* IMOML;
 
     // API addresses
     VirtualAlloc_t          VirtualAlloc;
@@ -245,9 +247,11 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     uintptr address = (uintptr)memPage;
     uintptr loaderAddr = address + 1000 + RandUintN(address, 128);
     uintptr moduleAddr = address + 3000 + RandUintN(address, 128);
-    // initialize structure
+    // allocate loader memory
     PELoader* loader = (PELoader*)loaderAddr;
     mem_init(loader, sizeof(PELoader));
+    // store process environment
+    loader->IMOML = runtime->Env.GetIMOML();
     // store config and context
     loader->Runtime = runtime;
     loader->Config  = *config;
@@ -339,13 +343,15 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
 static void* allocPELoaderMemPage(PELoader_Cfg* config)
 {
 #ifdef _WIN64
-    uint hash = 0xEFE2E03329515B77;
-    uint key  = 0x81723B49C5827760;
+    uint mHash = 0x7CCA6C542E19FE5E;
+    uint pHash = 0xAA8D188A1F0862DC;
+    uint hKey  = 0x6EDC8B580ACA6913;
 #elif _WIN32
-    uint hash = 0xE0C5DD0C;
-    uint key  = 0x1057DA5A;
+    uint mHash = 0x67F47A59;
+    uint pHash = 0xA7CFDD6F;
+    uint hKey  = 0x0F2BB61F;
 #endif
-    VirtualAlloc_t virtualAlloc = config->FindAPI(hash, key);
+    VirtualAlloc_t virtualAlloc = config->FindAPI(mHash, pHash, hKey);
     if (virtualAlloc == NULL)
     {
         return NULL;
@@ -666,11 +672,17 @@ static bool mapSections(PELoader* loader)
     for (uint16 i = 0; i < loader->FileHeader.NumberOfSections; i++)
     {
         uint32 virtualAddress   = section->VirtualAddress;
-        uint32 sizeOfRawData    = section->SizeOfRawData;
+        uint32 virtualSize      = section->VirtualSize;
         uint32 pointerToRawData = section->PointerToRawData;
+        uint32 sizeOfRawData    = section->SizeOfRawData;
         byte* dst = (byte*)(peImage + virtualAddress);
         byte* src = (byte*)(imageAddr + pointerToRawData);
-        mem_copy(dst, src, sizeOfRawData);
+        uint32 len = sizeOfRawData;
+        if (len > virtualSize)
+        {
+            len = virtualSize;
+        }
+        mem_copy(dst, src, len);
         section++;
     }
     // update EntryPoint absolute address
@@ -1103,7 +1115,7 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
         };
         mem_copy(module, mod, sizeof(mod));
     } else {
-        if (GetModuleFileName(hModule, module, sizeof(module)) == 0)
+        if (GetModuleFileName(loader->IMOML, hModule, module, sizeof(module)) == 0)
         {
             SetLastErrno(ERR_LOADER_NOT_FOUND_MODULE);
             return NULL;
@@ -1423,7 +1435,7 @@ static bool ldr_process_import()
         {
             srcThunk = peImage + import->OriginalFirstThunk;
         } else {
-            srcThunk = peImage + import->FirstThunk;
+            srcThunk = peImage + import->FirstThunk; // TODO remove this branch
         }
         dstThunk = peImage + import->FirstThunk;
         // fix function address
@@ -1537,7 +1549,7 @@ static HMODULE ldr_load_module(LPSTR name)
     {
         return NULL;
     }
-    HMODULE hModule = GetModuleHandle(nameW);
+    HMODULE hModule = GetModuleHandle(loader->IMOML, nameW);
     runtime->Memory.Free(nameW);
     return hModule;
 }
@@ -2573,8 +2585,8 @@ static void reset_handler()
 {
     PELoader* loader = getPELoaderPointer();
 
-    void* addr = GetFuncAddr(&restart_image);
-    HANDLE hThread = loader->CreateThread(NULL, 0, addr, NULL, 0, NULL);
+    void*  address = GetFuncAddr(&restart_image);
+    HANDLE hThread = loader->CreateThread(NULL, 0, address, NULL, 0, NULL);
     if (hThread == NULL)
     {
         return;
