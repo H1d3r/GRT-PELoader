@@ -143,7 +143,7 @@ static void  erasePELoaderMethods(PELoader* loader);
 static errno cleanPELoader(PELoader* loader);
 
 static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
-static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName);
+static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName);
 static errno ldr_init_mutex();
 static bool  ldr_copy_image();
 static void* ldr_process_export(LPSTR name);
@@ -371,55 +371,56 @@ static void* allocPELoaderMemPage(PELoader_Cfg* config)
 static bool initPELoaderAPI(PELoader* loader)
 {
     typedef struct { 
-        uint hash; uint key; void* proc;
+        uint mHash; uint pHash; uint hKey; void* proc;
     } winapi;
     winapi list[] =
 #ifdef _WIN64
     {
-        { 0x21E5E7E61968BBF4, 0x38FC2BB8B9E8F0B1 }, // VirtualAlloc
-        { 0x7DDAB5BF4E742736, 0x6E0D1E4F5D19BE67 }, // VirtualFree
-        { 0x6CF439115B558DE1, 0x7CAC9554D5A67E28 }, // VirtualProtect
-        { 0x90BD05BA72DD948C, 0x253672CEAE439BB6 }, // LoadLibraryA
-        { 0x0322C392AB9AE610, 0x2CF3559162E79E91 }, // FreeLibrary
-        { 0xF4E6DE881A59F6A0, 0xBC2E958CCBE70AA2 }, // GetProcAddress
-        { 0x62E83480AE0AAFC7, 0x86C0AECD3EF92256 }, // CreateThread
-        { 0xE0846C4ED5129CD3, 0x8C8C31D65FAFC1C4 }, // ExitThread
-        { 0xE8CA42297DA7319C, 0xAC51BC3A630A84FC }, // FlushInstructionCache
-        { 0x04A85D44E64689B3, 0xBB2834EF8BE725C9 }, // CreateMutexA
-        { 0x5B84A4B6173E4B44, 0x089FC914B21A66DA }, // ReleaseMutex
-        { 0x91BB0A2A34E70890, 0xB2307F73C72A83BD }, // WaitForSingleObject
-        { 0xC4EEF38337C71478, 0x7A1AD68718F1383E }, // CreateFileA
-        { 0xB23064DF64282DE1, 0xD62F5C65075FCCE8 }, // CloseHandle
-        { 0xEF31896F2FACEC04, 0x0E670990125E8E48 }, // GetCommandLineA
-        { 0x701EF754FFADBDC2, 0x6D5BE783B0AF5812 }, // GetCommandLineW
-        { 0xFCB18A0B702E8AB9, 0x8E1D5AE1A2FD9196 }, // LocalFree
-        { 0x599C793AB3F4599E, 0xBBBA4AE31D6A6D8F }, // GetStdHandle
+        { 0xE76D4D058E866C8F, 0xA0A93FC801DCA874, 0xDC0D07D21838938D }, // VirtualAlloc
+        { 0x1526279269733B87, 0x502A741BB71E85B4, 0x723D605A7B2777B4 }, // VirtualFree
+        { 0x00240DCC9E809327, 0x9DE9DCDBC168BCB5, 0xAEAB0A9DE37E8DA5 }, // VirtualProtect
+        { 0x62B29DA273DB4961, 0x765460317300B27F, 0x45EC64F6B9C67579 }, // LoadLibraryA
+        { 0x9323F1E932AB1CC7, 0x4F1C84C32514C065, 0x4163AE252BE32A0A }, // FreeLibrary
+        { 0x4342614F4E42F23B, 0x28E536A81B0E5FBC, 0x112B9FA92C790A9F }, // GetProcAddress
+        { 0xD3005CC424AD992F, 0x915A9A67F9624C94, 0x0286C91B1146AA8A }, // CreateThread
+        { 0xA9181B4769675A0D, 0x4437AAD530C05680, 0x255CF8D04E88F38F }, // ExitThread
+        { 0x901D40CD2AF4F156, 0x1D27674B4B5A849A, 0xEB434A8027309B2B }, // FlushInstructionCache
+        { 0x0263CBDEA4A84D63, 0x1A72BB5222C92A04, 0x290DD2AD7712F521 }, // CreateMutexA
+        { 0xA2BEF0DE50706AE1, 0x60538A615A3DC39D, 0x26A74F6C0A6DA07C }, // ReleaseMutex
+        { 0xFC442D256BDAE85F, 0x62BCB99CC882FABE, 0x14529C2202547DB1 }, // WaitForSingleObject
+        { 0xC50C116838885095, 0xC9FC614CEC6418EA, 0xEB95F0FFDD9A0164 }, // CreateFileA
+        { 0x22AD28552539A1A9, 0x59F5D1E90A85FD71, 0x76C1F7E62CED2080 }, // CloseHandle
+        { 0x74B117A381995B72, 0x60ED37D97353DEB7, 0xDC1DBF0237B732AE }, // GetCommandLineA
+        { 0x1D21E8324BDA6293, 0x57D3F898478FF91F, 0xA7ADC351AF5C208F }, // GetCommandLineW
+        { 0xD6E1E0452B9A4800, 0xC292CD4CFBA787F8, 0x2E76D6A9ADA85FD2 }, // LocalFree
+        { 0x7AFC6DFC16A6BD24, 0x9A283FBDAD1BBE92, 0x1F174C21E88F2DD4 }, // GetStdHandle
     };
 #elif _WIN32
     {
-        { 0x28310500, 0x51C40B22 }, // VirtualAlloc
-        { 0xBC28097D, 0x4483038A }, // VirtualFree
-        { 0x7B578622, 0x6950410A }, // VirtualProtect
-        { 0x3DAF1E96, 0xD7E436F3 }, // LoadLibraryA
-        { 0x2BC5BE30, 0xC2B2D69A }, // FreeLibrary
-        { 0xE971801A, 0xEC6F6D90 }, // GetProcAddress
-        { 0xD1AFE117, 0xDA772D98 }, // CreateThread
-        { 0xC4471F00, 0x6B6811C7 }, // ExitThread
-        { 0x73AFF9EE, 0x16AA8D66 }, // FlushInstructionCache
-        { 0xFF3A4BBB, 0xD2F55A75 }, // CreateMutexA
-        { 0x30B41C8C, 0xDD13B99D }, // ReleaseMutex
-        { 0x4DF94300, 0x85D5CD6F }, // WaitForSingleObject
-        { 0xE8F53C85, 0xDCC5C6B9 }, // CreateFileA
-        { 0x7DC545BC, 0xCBD67153 }, // CloseHandle
-        { 0xA187476E, 0x5AF922F3 }, // GetCommandLineA
-        { 0xC15EF07A, 0x47A945CE }, // GetCommandLineW
-        { 0x36B1013C, 0x0852225B }, // LocalFree    
-        { 0xAE68A468, 0xD611C7F0 }, // GetStdHandle
+        { 0x7C350141, 0x689AA1E3, 0x3A5308D4 }, // VirtualAlloc
+        { 0x8A03B77F, 0x640BD6A8, 0x64EA9AC2 }, // VirtualFree
+        { 0xDD4119D9, 0x3077A74E, 0x7155ED28 }, // VirtualProtect
+        { 0x73563EF7, 0xB04095D2, 0x6468B59D }, // LoadLibraryA
+        { 0x9C0AD7F5, 0xF25AB58A, 0xD32B963C }, // FreeLibrary
+        { 0x521818B4, 0x76C5A295, 0xC8390D32 }, // GetProcAddress
+        { 0xFDFE0471, 0xDDAFACA6, 0x6E386ED3 }, // CreateThread
+        { 0x648DA93C, 0xC8B01CF6, 0xE6D32B90 }, // ExitThread
+        { 0x86E7C29B, 0x5BD90FC5, 0x2B213815 }, // FlushInstructionCache
+        { 0x8C83799F, 0x96AB272A, 0x5D0E1AAA }, // CreateMutexA
+        { 0x2A5936B2, 0xA260CC33, 0xC242D9C7 }, // ReleaseMutex
+        { 0x2B3F0504, 0x209FAE3F, 0x98BFE3BF }, // WaitForSingleObject
+        { 0x3C823683, 0x4E5E3A68, 0x16B42ABE }, // CreateFileA
+        { 0x33877578, 0xC92AF0C7, 0xED67E11B }, // CloseHandle
+        { 0x53778EF8, 0x21E3793F, 0x15F9DE4B }, // GetCommandLineA
+        { 0x07BE85A7, 0xC5B2807C, 0x223C7896 }, // GetCommandLineW
+        { 0x0E9AD1DF, 0x8935E1E7, 0x891771CD }, // LocalFree
+        { 0xE0CC0466, 0xD7AB6E7F, 0x9EAFCC67 }, // GetStdHandle
     };
 #endif
     for (int i = 0; i < arrlen(list); i++)
     {
-        void* proc = loader->Config.FindAPI(list[i].hash, list[i].key);
+        winapi item = list[i];
+        void*  proc = loader->Config.FindAPI(item.mHash, item.pHash, item.hKey);
         if (proc == NULL)
         {
             return false;
@@ -1121,8 +1122,8 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
             return NULL;
         }
     }
-    // check is PE Loader internal methods
-    void* method = ldr_GetMethods(module, lpProcName);
+    // check is PE Loader internal method or hook
+    void* method = ldr_get_hooks(module, lpProcName);
     if (method != NULL)
     {
         return method;
@@ -1131,7 +1132,7 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 }
 
 __declspec(noinline)
-static void* ldr_GetMethods(LPCWSTR module, LPCSTR lpProcName)
+static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName)
 {
     typedef struct {
         uint hash; uint key; void* method;
