@@ -18,7 +18,7 @@ func main() {
 	args := []*argument.Arg{
 		{ID: 1, Data: []byte{0xFF}},     // invalid PE image
 		{ID: 2, Data: []byte(cmdlineA)}, // command line ANSI
-		{ID: 3, Data: []byte(cmdlineW)}, // command line Unicode
+		{ID: 3, Data: []byte(cmdlineW)}, // command line UTF16
 		{ID: 4, Data: []byte{0x01}},     // wait main thread
 		{ID: 5, Data: []byte{0x01}},     // allow skip dll
 		{ID: 6, Data: []byte{0x01}},     // ignore standard handle
@@ -42,7 +42,7 @@ func main() {
 	args = []*argument.Arg{
 		{ID: 1, Data: []byte{0xFF}},     // invalid PE image
 		{ID: 2, Data: []byte(cmdlineA)}, // command line ANSI
-		{ID: 3, Data: []byte(cmdlineW)}, // command line Unicode
+		{ID: 3, Data: []byte(cmdlineW)}, // command line UTF16
 		{ID: 4, Data: []byte{0x01}},     // wait main thread
 		{ID: 5, Data: []byte{0x01}},     // allow skip dll
 		{ID: 6, Data: []byte{0x01}},     // ignore standard handle
