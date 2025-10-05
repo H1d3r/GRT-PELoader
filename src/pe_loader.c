@@ -144,6 +144,7 @@ static errno cleanPELoader(PELoader* loader);
 
 static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName);
+
 static errno ldr_init_mutex();
 static bool  ldr_copy_image();
 static void* ldr_process_export(LPSTR name);
@@ -1123,10 +1124,10 @@ void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
         }
     }
     // check is PE Loader internal method or hook
-    void* method = ldr_get_hooks(module, lpProcName);
-    if (method != NULL)
+    void* hook = ldr_get_hooks(module, lpProcName);
+    if (hook != NULL)
     {
-        return method;
+        return hook;
     }
     return loader->GetProcAddress(hModule, lpProcName);
 }
@@ -1135,110 +1136,116 @@ __declspec(noinline)
 static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName)
 {
     typedef struct {
-        uint hash; uint key; void* method;
-    } method;
-    method methods[] =
+        uint mHash; uint pHash; uint hKey; void* hook;
+    } hook;
+    hook list[] =
 #ifdef _WIN64
     {
-        { 0x1DE95D906D270C1E, 0x2672227B97F5DAD9, GetFuncAddr(&ldr_GetProcAddress)          },
-        { 0x1848E44B66F18C48, 0x16480B2B71CCBA71, GetFuncAddr(&hook_GetCommandLineA)        },
-        { 0x6CDF268D5D259686, 0xB2ECF3E4AAC267BA, GetFuncAddr(&hook_GetCommandLineW)        },
-        { 0x091A5CA0D803A190, 0x01DDBC313ED0F7ED, GetFuncAddr(&hook_CommandLineToArgvW)     },
-        { 0xD64DA86D6A985B33, 0xE8DAF74FBC29AF11, GetFuncAddr(&hook_GetStdHandle)           },
-        { 0x9B91E956B96D6389, 0xEBB723BF1CEE4569, GetFuncAddr(&hook_CreateThread)           },
-        { 0x053D2B184D2AD724, 0x5DFCC08DACB101DD, GetFuncAddr(&hook_ExitThread)             },
-        { 0x003837989C804A7A, 0x77BACCABEB6CE508, GetFuncAddr(&hook_ExitProcess)            },
-        { 0x0109ACED1D5A0663, 0x7417D87CE8EBE1AA, GetFuncAddr(&hook_ExitThread)             }, // RtlExitUserThread
-        { 0xF0F5DD7990C5EFCF, 0x5461D0002BE008A4, GetFuncAddr(&hook_ExitProcess)            }, // RtlExitUserProcess
-        { 0x8D91B93B7BFC89B4, 0x428A7543FADEEF29, GetFuncAddr(&hook_msvcrt_getmainargs)     },
-        { 0xB6627A6DDB0A9B1A, 0x729C834DB43EB70A, GetFuncAddr(&hook_msvcrt_wgetmainargs)    },
-        { 0x09D5A9F4AFA840B0, 0xAA4A0E457ACEF3AF, GetFuncAddr(&hook_msvcrt_atexit)          },
-        { 0x3C03CF70E803FFC9, 0x7DF0A0B4D6DA6C61, GetFuncAddr(&hook_msvcrt_onexit)          },
-        { 0xF69B9609BFC3866B, 0x78F57B29208EC83F, GetFuncAddr(&hook_msvcrt_dllonexit)       },
-        { 0x4B7D921A385FB3D2, 0xC579F5ED84E53139, GetFuncAddr(&hook_msvcrt_exit)            },
-        { 0xCF5B61D9D1D07170, 0x8E81AD35920956CF, GetFuncAddr(&hook_msvcrt_exit)            }, // _exit
-        { 0x9C21EEDD7A2A5DDE, 0x662C082531C1CF07, GetFuncAddr(&hook_msvcrt_exit)            }, // _Exit
-        { 0x30E025C660C45C1A, 0xFF6D4FB59EA71340, GetFuncAddr(&hook_msvcrt_exit)            }, // _cexit
-        { 0x8B0F23118385BCFE, 0x8DCDC63B3ED804BA, GetFuncAddr(&hook_msvcrt_exit)            }, // _c_exit
-        { 0x70596B50D6A5DC99, 0xA207B156D6577956, GetFuncAddr(&hook_msvcrt_exit)            }, // quick_exit
-        { 0x8D9113B7D97053BE, 0xC2BF1EFCD107A1AE, GetFuncAddr(&hook_msvcrt_exit)            }, // _amsg_exit
-        { 0xBEA31032BE54C256, 0xA70BB0D7ED5706AB, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
-        { 0x7C58F853C94D7734, 0x01728DEDCEA9827D, GetFuncAddr(&hook_msvcrt_beginthread)     },
-        { 0x5A9C7453C029573A, 0x14970FDAB85504CA, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
-        { 0x0BD5D73C8548860C, 0x7718D9A31945FC05, GetFuncAddr(&hook_msvcrt_endthread)       },
-        { 0xE25BF7B3E1C51A2A, 0xE96A26D024C2EAD7, GetFuncAddr(&hook_msvcrt_endthreadex)     },
-        { 0x677E9E5FFC09596F, 0xF0CDF0DC4A6693B0, GetFuncAddr(&hook_ucrtbase_p_argc)        },
-        { 0x348408E3C4C1F84A, 0x00D6384B5E49BE4E, GetFuncAddr(&hook_ucrtbase_p_argv)        },
-        { 0xE4963C275A179C3A, 0x56818722C1E69D4F, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
-        { 0xAA136812DF9EB160, 0x42548B3C4280B19A, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_atexit
-        { 0x4E7A26901BB3EC62, 0x386F945605B7A0AC, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
-        { 0x02C65C1FF64C3E77, 0x6D3D2282E138D2B7, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
-        { 0xD806168873719B4E, 0x477C6E75E8D61A35, GetFuncAddr(&hook_ucrtbase_exit)          },
-        { 0xE2C10C718CBC4B4A, 0x006ACBD0EBFF8DCE, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
-        { 0x84A9F41391B0C0E4, 0x41C04E4C5EEED31D, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
-        { 0xB3AD674905D869E3, 0x31970EFAD3DA5C17, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
-        { 0x2ACDB535FEF2CD76, 0x127E8E9F16D87088, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
-        { 0x8B23415012EA8D5B, 0xBA6276780F17E45E, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
-        { 0x3CC1F09F6B644BFA, 0xA620C2F1A2247C65, GetFuncAddr(&hook_ucrtbase_beginthread)   },
-        { 0xB37DC4391224F516, 0x5660750ECAE84417, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
-        { 0x7617799FD759FB6A, 0x02FED24E7D32EFD4, GetFuncAddr(&hook_ucrtbase_endthread)     },
-        { 0xF3FD3C6261671701, 0x4CFA9DEFBF4A8F72, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
+        { 0x1157A12A3CCCBCF0, 0x110E5A6CEF844687, 0xE3761DE4EFE39ED4, GetFuncAddr(&ldr_GetProcAddress)          },
+        { 0xA578CF08ED69EB2D, 0x5C6FEC81CAA3B1A3, 0xACD191FECA51AACF, GetFuncAddr(&hook_GetCommandLineA)        },
+        { 0x6D146EC2E0B343D2, 0xE9F55CD29DAE8AEA, 0xEF67344AA182DC0C, GetFuncAddr(&hook_GetCommandLineW)        },
+        { 0x1C0FD2DE1BAA2730, 0x8FF152F2B3ED26CC, 0x9FAB7B2D222B6907, GetFuncAddr(&hook_CommandLineToArgvW)     },
+        { 0xABA2D3C157D8B296, 0x09CA0B0331C8BD1C, 0xCC386ABC0E08045D, GetFuncAddr(&hook_GetStdHandle)           },
+        { 0xFA19C2C7C1BBC621, 0xC1D971E22F5FC759, 0x3FDC4AA7DA8799EE, GetFuncAddr(&hook_CreateThread)           },
+        { 0x65920F946E5D24A0, 0xE23FD2A2E80059BB, 0xD9267EBA7C324D62, GetFuncAddr(&hook_ExitThread)             },
+        { 0xCF2D53517606992B, 0xA1DC608BC8A2C347, 0x9356BD9C7805B6E8, GetFuncAddr(&hook_ExitProcess)            },
+        { 0x62775469FFFD9C7A, 0xFCA810D1E000D143, 0x0A1AF99724E90A25, GetFuncAddr(&hook_ExitThread)             }, // RtlExitUserThread
+        { 0xEBCDC8C2A543809C, 0x391AAC50931B2868, 0xA2FFC51FBA943F63, GetFuncAddr(&hook_ExitProcess)            }, // RtlExitUserProcess
+        { 0x58984160F1FE2D28, 0xA4D203A7D8BBDFD1, 0x3C12788C06C58CA1, GetFuncAddr(&hook_msvcrt_getmainargs)     },
+        { 0x299503685C2343A8, 0x116BD4CD1F7E3CA3, 0xBE556FDEE368FA15, GetFuncAddr(&hook_msvcrt_wgetmainargs)    },
+        { 0x41C9EBD486586B4C, 0x37720312C6724AAF, 0x10BE59C3858FB45B, GetFuncAddr(&hook_msvcrt_atexit)          },
+        { 0x3EE25FD510FAA7E6, 0xEDCAC470F5634857, 0x89E3761D64BAF329, GetFuncAddr(&hook_msvcrt_onexit)          },
+        { 0x502F0B62EEE34674, 0xBBAA24D1B0FAB2F3, 0xF075658338A3ECD0, GetFuncAddr(&hook_msvcrt_dllonexit)       },
+        { 0x232B0CFB48B3CB1F, 0xD6266A2CBD4E0E3A, 0x74897DEF2D79072F, GetFuncAddr(&hook_msvcrt_exit)            },
+        { 0xFACCA36559994C46, 0xEFA7E38C80104906, 0x781A8FA9928DBB80, GetFuncAddr(&hook_msvcrt_exit)            }, // _exit
+        { 0xF6BF6E0597E37FA9, 0x227E79498776B14A, 0xCB5DE4C1656298B8, GetFuncAddr(&hook_msvcrt_exit)            }, // _Exit
+        { 0x2E5A2386256F1988, 0xBED38E18159EDA87, 0x36A63CE974070DF6, GetFuncAddr(&hook_msvcrt_exit)            }, // _cexit
+        { 0xF34C0734CE7E1FDF, 0x1B850E91F78F61C4, 0x501B2D5B8A90982D, GetFuncAddr(&hook_msvcrt_exit)            }, // _c_exit
+        { 0xF08832FA50E24941, 0xA0F1A74C037C9BDB, 0xF51522519723F887, GetFuncAddr(&hook_msvcrt_exit)            }, // quick_exit
+        { 0x7D224772228250BD, 0x3F8A9889DC81C70D, 0xD37244D73E38F01D, GetFuncAddr(&hook_msvcrt_exit)            }, // _amsg_exit
+        { 0x16D9D3F866F577E4, 0xF65F604066C42B11, 0x47229D16ECEF740F, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
+        { 0xFA94A3087B0CF593, 0x16E18BF92FFC7C6D, 0x56F78A325866ADC0, GetFuncAddr(&hook_msvcrt_beginthread)     },
+        { 0xC2F23D0B4FC3B8A0, 0xD203820C138666FE, 0x33B43D02050237A3, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
+        { 0x8FA907505765D71E, 0xDF250DBEE87669C8, 0x28D234843D024582, GetFuncAddr(&hook_msvcrt_endthread)       },
+        { 0x48197D982AC1C465, 0x4A0AD7846C848F86, 0x1E6C16857609C0B4, GetFuncAddr(&hook_msvcrt_endthreadex)     },
+        { 0xF0266D6BDAB80C6B, 0xD7B26FD9E5DC0B57, 0x2C9BEE6C9FE0D62C, GetFuncAddr(&hook_ucrtbase_p_argc)        },
+        { 0xFE18DB4390B76A81, 0xCD56F9696DCE9422, 0x7C587706F08A928B, GetFuncAddr(&hook_ucrtbase_p_argv)        },
+        { 0xE0AD5C59F258D5FA, 0x239237030FD8E728, 0xC17DF801E360659F, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
+        { 0x784BD5891AC408A0, 0x0874B724BB751530, 0xCB0256E74DAAADF0, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_atexit
+        { 0x95D63C89A18BAD5E, 0x5451993245B5FDF4, 0xE2EF082AE19DFCEA, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
+        { 0xD1E1385A3F0A4A45, 0x6C79AB2137A7C3A0, 0x84F03148C82608E4, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
+        { 0xC58DD0101399A547, 0xB7098BF88B86C119, 0x6A69D3EF777CE700, GetFuncAddr(&hook_ucrtbase_exit)          },
+        { 0x6D909FB9E7C76F50, 0xFC6C332EF63DC28D, 0xCCABF8F3DB3A2870, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
+        { 0xE7A7E2952F7535CB, 0xEB020582C149E347, 0xA770E93F3FA1C27E, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
+        { 0xD7C289DD4E2DD131, 0xD2B801B2689018ED, 0xEAE07DFF7067CBFA, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
+        { 0x45DB6DFAC1A803D9, 0x2A52FA2643C355F3, 0x697FE7DF620EF43B, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
+        { 0x9E1CC01FA7A98DC2, 0xD84ECFC6D686E53C, 0xF5264FB60A82D1B3, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
+        { 0x3DDFE8BB76CF95F2, 0xCA790B882EDC59B0, 0x49393C7A4B3907E9, GetFuncAddr(&hook_ucrtbase_beginthread)   },
+        { 0x35AABBABC18E5BA3, 0xDD412FBFAE0B41B8, 0xBED389351F41EE45, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
+        { 0x076B473DA1B8AA84, 0xC70AD9A8C29A14A3, 0xB15F1F0B74A88CCD, GetFuncAddr(&hook_ucrtbase_endthread)     },
+        { 0x165FF801CB2F103A, 0x80DF3DC343C647B9, 0xA011267F33FF69C2, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
     };
 #elif _WIN32
     {
-        { 0x336C0B7C, 0xE6FD5E12, GetFuncAddr(&ldr_GetProcAddress)          },
-        { 0x027AFDAA, 0x6F1EE876, GetFuncAddr(&hook_GetCommandLineA)        },
-        { 0x76C60C20, 0x10FA5D7C, GetFuncAddr(&hook_GetCommandLineW)        },
-        { 0xABE5D9A9, 0x32898C57, GetFuncAddr(&hook_CommandLineToArgvW)     },
-        { 0x7DF993F6, 0x4AB8D860, GetFuncAddr(&hook_GetStdHandle)           },
-        { 0x0465FE82, 0x70880E4A, GetFuncAddr(&hook_CreateThread)           },
-        { 0x4F0C77BA, 0x89DD7B71, GetFuncAddr(&hook_ExitThread)             },
-        { 0xB439D7F0, 0xF97FF53F, GetFuncAddr(&hook_ExitProcess)            },
-        { 0x810BA4AF, 0x32504D91, GetFuncAddr(&hook_ExitThread)             }, // RtlExitUserThread
-        { 0x8FC383EA, 0xBE3EBDD0, GetFuncAddr(&hook_ExitProcess)            }, // RtlExitUserProcess
-        { 0xEC3DD822, 0x91377248, GetFuncAddr(&hook_msvcrt_getmainargs)     },
-        { 0x44C32027, 0x354751F7, GetFuncAddr(&hook_msvcrt_wgetmainargs)    },
-        { 0x11488404, 0xCC8231AF, GetFuncAddr(&hook_msvcrt_atexit)          },
-        { 0xDC46DA5B, 0x3F49D570, GetFuncAddr(&hook_msvcrt_onexit)          },
-        { 0xB5450AD6, 0xD0D3330A, GetFuncAddr(&hook_msvcrt_dllonexit)       },
-        { 0xF1E55A4D, 0x9A112CBD, GetFuncAddr(&hook_msvcrt_exit)            },
-        { 0x80A779FC, 0xB919AF61, GetFuncAddr(&hook_msvcrt_exit)            }, // _exit
-        { 0x359F0EBD, 0xC3EADDB1, GetFuncAddr(&hook_msvcrt_exit)            }, // _Exit
-        { 0x11DDB94D, 0xB92975A9, GetFuncAddr(&hook_msvcrt_exit)            }, // _cexit
-        { 0x91C44932, 0x8C4B60F8, GetFuncAddr(&hook_msvcrt_exit)            }, // _c_exit
-        { 0xC4AD4F7C, 0x3122305E, GetFuncAddr(&hook_msvcrt_exit)            }, // quick_exit
-        { 0xF2AE4C38, 0x7484F7A7, GetFuncAddr(&hook_msvcrt_exit)            }, // _amsg_exit
-        { 0x302015B0, 0xE53271F9, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
-        { 0x15D5ECD4, 0x361E1CB1, GetFuncAddr(&hook_msvcrt_beginthread)     },
-        { 0x363F1035, 0xACFEC527, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
-        { 0x5CDDA35D, 0x4333D46D, GetFuncAddr(&hook_msvcrt_endthread)       },
-        { 0x206C521E, 0x9E022665, GetFuncAddr(&hook_msvcrt_endthreadex)     },
-        { 0x9E4AA9D4, 0xA97CC100, GetFuncAddr(&hook_ucrtbase_p_argc)        },
-        { 0x4029DD68, 0x4F1713D1, GetFuncAddr(&hook_ucrtbase_p_argv)        },
-        { 0x21EF5083, 0xA44FD76E, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
-        { 0x968EA376, 0xE0415797, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_atexit
-        { 0xB1BF5E08, 0x404C0CF9, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
-        { 0xD3745DD0, 0x67D5DACC, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
-        { 0x1207ACD2, 0x8560B050, GetFuncAddr(&hook_ucrtbase_exit)          },
-        { 0x092BEA87, 0xE370C726, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
-        { 0x81BCEF46, 0xD0EAB5F5, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
-        { 0x73C7582D, 0x3AFEF1E0, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
-        { 0xB40F5BCE, 0x3DA209E2, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
-        { 0xE6A5BAB4, 0xCA976959, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
-        { 0x033589BB, 0x2BE6FFB1, GetFuncAddr(&hook_ucrtbase_beginthread)   },
-        { 0xD787345F, 0xC0B107F6, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
-        { 0xD98CB670, 0xBF7AD081, GetFuncAddr(&hook_ucrtbase_endthread)     },
-        { 0xAB1F1EFB, 0x95F5740B, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
+        { 0xF0ED49F9, 0x1B54E609, 0x07D295A7, GetFuncAddr(&ldr_GetProcAddress)          },
+        { 0x89BEE3E9, 0x06482012, 0x59DC0AFD, GetFuncAddr(&hook_GetCommandLineA)        },
+        { 0xB6FAE2CD, 0xD962792E, 0x7D7D98CF, GetFuncAddr(&hook_GetCommandLineW)        },
+        { 0x8DE42D3B, 0x34F8EA28, 0x792F03AC, GetFuncAddr(&hook_CommandLineToArgvW)     },
+        { 0xEC1638B7, 0x9E73A197, 0x3946430F, GetFuncAddr(&hook_GetStdHandle)           },
+        { 0xC702D18B, 0xEEEF6254, 0x75206691, GetFuncAddr(&hook_CreateThread)           },
+        { 0xE47A0E89, 0xA7A9BD9B, 0xD34397E1, GetFuncAddr(&hook_ExitThread)             },
+        { 0xB9DAB00B, 0x75573886, 0x6DF683FF, GetFuncAddr(&hook_ExitProcess)            },
+        { 0x0BE7F3A7, 0xA27772AB, 0x5DBDA851, GetFuncAddr(&hook_ExitThread)             }, // RtlExitUserThread
+        { 0x218D28DF, 0xF64F30C5, 0xB32EA5F0, GetFuncAddr(&hook_ExitProcess)            }, // RtlExitUserProcess
+        { 0xAA841623, 0x44E5C9F3, 0x816EB549, GetFuncAddr(&hook_msvcrt_getmainargs)     },
+        { 0x66A10CA6, 0xA2BA2968, 0xAC17CD10, GetFuncAddr(&hook_msvcrt_wgetmainargs)    },
+        { 0x3D3837B6, 0x38694926, 0xD24DA30B, GetFuncAddr(&hook_msvcrt_atexit)          },
+        { 0x1EC2BB5F, 0x3DD3B2E3, 0xDDBC367C, GetFuncAddr(&hook_msvcrt_onexit)          },
+        { 0x7D7BCDEA, 0xEF475389, 0xE93CCDED, GetFuncAddr(&hook_msvcrt_dllonexit)       },
+        { 0xF593B637, 0x924CB533, 0x225EA7B0, GetFuncAddr(&hook_msvcrt_exit)            },
+        { 0x74A846F4, 0x03F08899, 0x6D739E11, GetFuncAddr(&hook_msvcrt_exit)            }, // _exit
+        { 0xF267020C, 0x32ABCBC5, 0xA8AA1301, GetFuncAddr(&hook_msvcrt_exit)            }, // _Exit
+        { 0x54F3FB50, 0x53315825, 0xBD35B97A, GetFuncAddr(&hook_msvcrt_exit)            }, // _cexit
+        { 0xBD63617A, 0xDB354F97, 0x3727E4F5, GetFuncAddr(&hook_msvcrt_exit)            }, // _c_exit
+        { 0x82BE9EE8, 0x1463DE41, 0xD744D16D, GetFuncAddr(&hook_msvcrt_exit)            }, // quick_exit
+        { 0xE7F1D33A, 0x215CF61C, 0xB96553A7, GetFuncAddr(&hook_msvcrt_exit)            }, // _amsg_exit
+        { 0xD3C29970, 0x2D2DDBE7, 0xC8D3945F, GetFuncAddr(&hook_msvcrt_exit)            }, // _o_exit
+        { 0x0A1B0580, 0xC3EB869F, 0x170D274A, GetFuncAddr(&hook_msvcrt_beginthread)     },
+        { 0x870B643B, 0x08CAE98C, 0xE177E5F7, GetFuncAddr(&hook_msvcrt_beginthreadex)   },
+        { 0xFD253BB3, 0x400B304B, 0x747B2E73, GetFuncAddr(&hook_msvcrt_endthread)       },
+        { 0x0A4C8E15, 0xD522BEE5, 0x7B915AD6, GetFuncAddr(&hook_msvcrt_endthreadex)     },
+        { 0xD133074D, 0xDCFD050E, 0x7A843AD5, GetFuncAddr(&hook_ucrtbase_p_argc)        },
+        { 0x89FB2177, 0x71EC5A0D, 0x907D1D6A, GetFuncAddr(&hook_ucrtbase_p_argv)        },
+        { 0x8296650E, 0x6ADCA7BC, 0xCDF374BB, GetFuncAddr(&hook_ucrtbase_p_wargv)       },
+        { 0xB355C6A1, 0xBA600B8E, 0xC2A744E4, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_atexit
+        { 0x44859D33, 0x720D5FDC, 0x69637E47, GetFuncAddr(&hook_ucrtbase_atexit)        }, // _crt_at_quick_exit
+        { 0x6B79745C, 0xAD509C4E, 0x44F1607E, GetFuncAddr(&hook_ucrtbase_onexit)        }, // _register_onexit_function
+        { 0x0C1ED9EA, 0x5A53E5BF, 0x9917A36E, GetFuncAddr(&hook_ucrtbase_exit)          },
+        { 0x3CFAB104, 0x5AB8A5F7, 0xF6E42DB4, GetFuncAddr(&hook_ucrtbase_exit)          }, // _exit
+        { 0x52B1B9FD, 0x706F8EF0, 0xDF4C49F2, GetFuncAddr(&hook_ucrtbase_exit)          }, // _Exit
+        { 0xDFC75191, 0xCD16F1DB, 0xE65BA5BB, GetFuncAddr(&hook_ucrtbase_exit)          }, // _cexit
+        { 0x5D0497C6, 0x24B84623, 0x132DD0C1, GetFuncAddr(&hook_ucrtbase_exit)          }, // _c_exit
+        { 0xD8D19A14, 0x89087139, 0x116A780E, GetFuncAddr(&hook_ucrtbase_exit)          }, // quick_exit
+        { 0xC5BB8743, 0xDF5ECACC, 0x32EF8743, GetFuncAddr(&hook_ucrtbase_beginthread)   },
+        { 0x91F0CDA7, 0x405E3C84, 0xC68AFAB8, GetFuncAddr(&hook_ucrtbase_beginthreadex) },
+        { 0xBE9DFD88, 0x59F0450D, 0x86063BA9, GetFuncAddr(&hook_ucrtbase_endthread)     },
+        { 0x3D6A8336, 0xFB91026B, 0x331FD069, GetFuncAddr(&hook_ucrtbase_endthreadex)   },
     };
 #endif
-    for (int i = 0; i < arrlen(methods); i++)
+    for (int i = 0; i < arrlen(list); i++)
     {
-        uint hash = HashAPI_W((uint16*)module, (byte*)lpProcName, methods[i].key);
-        if (hash != methods[i].hash)
+        hook item  = list[i];
+        uint mHash = CalcModHash_W((uint16*)(module), item.hKey);
+        if (mHash != item.mHash)
         {
             continue;
         }
-        return methods[i].method;
+        uint pHash = CalcProcHash((byte*)lpProcName, item.hKey);
+        if (pHash != item.pHash)
+        {
+            continue;
+        }
+        return item.hook;
     }
     return NULL;
 }
@@ -1842,13 +1849,15 @@ LPWSTR* hook_CommandLineToArgvW(LPCWSTR lpCmdLine, int* pNumArgs)
 
     // find shell32.CommandLineToArgvW
 #ifdef _WIN64
-    uint hash = 0x4A48978496F59E02;
-    uint key  = 0xC735570A84698151;
+    uint mHash = 0x1CD9EC250616E109;
+    uint pHash = 0xB19CBAA302673FE9;
+    uint hKey  = 0xB4B882421FE62D1F;
 #elif _WIN32
-    uint hash = 0xD7007E2E;
-    uint key  = 0x15875D48;
+    uint mHash = 0x5DAFEDFC;
+    uint pHash = 0xBED6046A;
+    uint hKey  = 0x7A08154B;
 #endif
-    CommandLineToArgvW_t CommandLineToArgvW = loader->Config.FindAPI(hash, key);
+    CommandLineToArgvW_t CommandLineToArgvW = loader->Config.FindAPI(mHash, pHash, hKey);
     if (CommandLineToArgvW == NULL)
     {
         return NULL;
@@ -2082,13 +2091,15 @@ int __cdecl hook_msvcrt_getmainargs(
 
     // find msvcrt.__getmainargs
 #ifdef _WIN64
-    uint hash = 0x305F6CF2D8F6B0DE;
-    uint key  = 0x4AB3805CF30D6415;
+    uint mHash = 0x52CEA62C2AF4F9C6;
+    uint pHash = 0x9F08687311B2AC6F;
+    uint hKey  = 0x2A4C6C7B39CC674F;
 #elif _WIN32
-    uint hash = 0xE1E75000;
-    uint key  = 0x14BEF388;
+    uint mHash = 0x67E36D1C;
+    uint pHash = 0xC4AC5444;
+    uint hKey  = 0xADAA4C44;
 #endif
-    msvcrt_getmainargs_t getmainargs = loader->Config.FindAPI(hash, key);
+    msvcrt_getmainargs_t getmainargs = loader->Config.FindAPI(mHash, pHash, hKey);
     if (getmainargs == NULL)
     {
         return -1;
@@ -2122,13 +2133,15 @@ int __cdecl hook_msvcrt_wgetmainargs(
 
     // find msvcrt.__wgetmainargs
 #ifdef _WIN64
-    uint hash = 0x1C3CFAD70CBF5CC3;
-    uint key  = 0x2443BB3D37654188;
+    uint mHash = 0xBC73780240DAAD3C;
+    uint pHash = 0x5615F23FC8EB535B;
+    uint hKey  = 0x005B0A6FCD5A1154;
 #elif _WIN32
-    uint hash = 0x44C32027;
-    uint key  = 0x354751F7;
+    uint mHash = 0xFD695257;
+    uint pHash = 0x6AC316B4;
+    uint hKey  = 0xBAAA7F84;
 #endif
-    msvcrt_wgetmainargs_t wgetmainargs = loader->Config.FindAPI(hash, key);
+    msvcrt_wgetmainargs_t wgetmainargs = loader->Config.FindAPI(mHash, pHash, hKey);
     if (wgetmainargs == NULL)
     {
         return -1;
@@ -2239,13 +2252,15 @@ int* __cdecl hook_ucrtbase_p_argc()
 
     // call ucrtbase.__p___argc
 #ifdef _WIN64
-    uint hash = 0xADF700C69C846081;
-    uint key  = 0x164425A411FFA1EC;
+    uint mHash = 0x8C3BFA3A3E1F6AE2;
+    uint pHash = 0x9944C3FD882C3E13;
+    uint hKey  = 0xEFC1321D1BE46BB7;
 #elif _WIN32
-    uint hash = 0xDDB2351C;
-    uint key  = 0x2F7CAB87;
+    uint mHash = 0xB094C19D;
+    uint pHash = 0x80842212;
+    uint hKey  = 0xAF4827C9;
 #endif
-    ucrtbase_p_argc_t p_argc = loader->Config.FindAPI(hash, key);
+    ucrtbase_p_argc_t p_argc = loader->Config.FindAPI(mHash, pHash, hKey);
     if (p_argc == NULL)
     {
         return NULL;
@@ -2268,13 +2283,15 @@ byte*** __cdecl hook_ucrtbase_p_argv()
 
     // call ucrtbase.__p___argv
 #ifdef _WIN64
-    uint hash = 0xC64ED1F8F1B1277C;
-    uint key  = 0xBDAD98E6C2B6C986;
+    uint mHash = 0x76331E01239D4039;
+    uint pHash = 0x4C4B4C56BC8E96F6;
+    uint hKey  = 0x5E0CC8B43919F3E1;
 #elif _WIN32
-    uint hash = 0x4B6EA85E;
-    uint key  = 0x8E47E1D6;
+    uint mHash = 0x0BD54317;
+    uint pHash = 0x64472B0D;
+    uint hKey  = 0x9D9FB3CF;
 #endif
-    ucrtbase_p_argv_t p_argv = loader->Config.FindAPI(hash, key);
+    ucrtbase_p_argv_t p_argv = loader->Config.FindAPI(mHash, pHash, hKey);
     if (p_argv == NULL)
     {
         return NULL;
@@ -2297,13 +2314,15 @@ uint16*** __cdecl hook_ucrtbase_p_wargv()
 
     // call ucrtbase.__p___wargv
 #ifdef _WIN64
-    uint hash = 0xC89A5BF3DB908890;
-    uint key  = 0xF5124C295B193B2F;
+    uint mHash = 0xD70662821E221E17;
+    uint pHash = 0x8D749DE0FA1813FB;
+    uint hKey  = 0xE329CFBFBB074BC1;
 #elif _WIN32
-    uint hash = 0x020C7D19;
-    uint key  = 0x0FCC5CEA;
+    uint mHash = 0x932A1B6B;
+    uint pHash = 0xD61A0370;
+    uint hKey  = 0x8F33ADE7;
 #endif
-    ucrtbase_p_wargv_t p_wargv = loader->Config.FindAPI(hash, key);
+    ucrtbase_p_wargv_t p_wargv = loader->Config.FindAPI(mHash, pHash, hKey);
     if (p_wargv == NULL)
     {
         return NULL;
