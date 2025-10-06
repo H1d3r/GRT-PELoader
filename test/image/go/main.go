@@ -33,7 +33,7 @@ var (
 )
 
 func init() {
-	flag.IntVar(&numKick, "kick", 100, "set the number of kick about watchdog")
+	flag.IntVar(&numKick, "kick", 0, "set the number of kick about watchdog")
 	flag.IntVar(&p1, "p1", 0, "ignored argument for test")
 	flag.StringVar(&p2, "p2", "", "ignored argument for test")
 	flag.Parse()
@@ -81,6 +81,10 @@ func main() {
 }
 
 func testRuntimeAPI() {
+	if GleamRT == nil {
+		return
+	}
+
 	hGleamRT := GleamRT.Handle
 	hKernel32 := modKernel32.Handle()
 
@@ -97,11 +101,11 @@ func testRuntimeAPI() {
 		"AS_Erase",
 		"AS_EraseAll",
 
-		"IMS_SetValue",
-		"IMS_GetValue",
-		"IMS_GetPointer",
-		"IMS_Delete",
-		"IMS_DeleteAll",
+		"IS_SetValue",
+		"IS_GetValue",
+		"IS_GetPointer",
+		"IS_Delete",
+		"IS_DeleteAll",
 
 		"SM_Pause",
 		"SM_Continue",
@@ -336,12 +340,21 @@ func testWatchdog() {
 	}
 
 	go func() {
-		for i := 0; i < numKick; i++ {
+		doKick := func() {
 			ret, _, _ = Kick.Call()
 			if ret != noError {
 				log.Fatalf("failed to kick watchdog: 0x%X\n", ret)
 			}
 			time.Sleep(time.Second)
+		}
+		if numKick == 0 {
+			for {
+				doKick()
+			}
+		} else {
+			for i := 0; i < numKick; i++ {
+				doKick()
+			}
 		}
 		ret, _, _ = Disable.Call()
 		if ret != noError {
