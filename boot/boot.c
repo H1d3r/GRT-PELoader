@@ -153,7 +153,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_CMDLINE_A;
     }
-    // load command line Unicode, it can be empty
+    // load command line UTF16, it can be empty
     if (!runtime->Argument.GetPointer(ARG_ID_CMDLINE_W, &config->CommandLineW, NULL))
     {
         return ERR_NOT_FOUND_CMDLINE_W;
