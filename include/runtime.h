@@ -315,7 +315,8 @@ typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
 // 
 // These methods are used for API Redirector or common shellcode.
 typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, bool redirect);
-typedef void* (*GetProcByHash_t)(uint hash, uint key, bool redirect);
+typedef void* (*GetProcByHash_t)(uint mHash, uint pHash, uint hKey, bool redirect);
+typedef void* (*GetProcByHashML_t)(void* list, uint mHash, uint pHash, uint hKey, bool redirect);
 
 // about sysmon
 #ifndef SYSMON_H
@@ -349,6 +350,14 @@ typedef void  (*WDSetHandler_t)(WDHandler_t handler);
 typedef bool  (*WDGetStatus_t)(WD_Status* status);
 typedef errno (*WDPause_t)();
 typedef errno (*WDContinue_t)();
+
+// about process environment
+//
+// These methods are used to ensure that __readgsqword or __readfsdword
+// is used only once, of course except GetTEB.
+typedef void* (*GetPEB_t)();   // get stored PEB address
+typedef void* (*GetTEB_t)();   // only a shortcut
+typedef void* (*GetIMOML_t)(); // get stored InMemoryOrderModuleList address
 
 // about runtime core methods
 //
@@ -385,9 +394,10 @@ typedef void  (*RTStop_t)();
 // Runtime_M contains exported runtime methods.
 typedef struct {
     struct {
-        FindAPI_t   FindAPI;
-        FindAPI_A_t FindAPI_A;
-        FindAPI_W_t FindAPI_W;
+        FindAPI_t    FindAPI;
+        FindAPI_ML_t FindAPI_ML;   
+        FindAPI_A_t  FindAPI_A;
+        FindAPI_W_t  FindAPI_W;
     } HashAPI;
 
     struct {
@@ -527,8 +537,9 @@ typedef struct {
     } MemScanner;
 
     struct {
-        GetProcByName_t GetProcByName;
-        GetProcByHash_t GetProcByHash;
+        GetProcByName_t   GetProcByName;
+        GetProcByHash_t   GetProcByHash;
+        GetProcByHashML_t GetProcByHashML;
     } Procedure;
 
     struct {
@@ -549,13 +560,15 @@ typedef struct {
     } Watchdog;
 
     struct {
+        GetPEB_t   GetPEB;
+        GetTEB_t   GetTEB;
+        GetIMOML_t GetIMOML;
+    } Env;
+
+    struct {
         GetProcAddress_t GetProcAddress;
         ExitProcess_t    ExitProcess;
     } Raw;
-
-    struct {
-        HANDLE Mutex;
-    } Data;
 
     struct {
         RTSleepHR_t Sleep;
@@ -566,6 +579,10 @@ typedef struct {
         RTExit_t    Exit;
         RTStop_t    Stop;
     } Core;
+
+    struct {
+        HANDLE Mutex;
+    } Data;
 } Runtime_M;
 
 typedef struct {
