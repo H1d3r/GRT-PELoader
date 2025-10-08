@@ -92,9 +92,15 @@ func testRuntimeAPI() {
 	for _, proc := range []string{
 		"GetProcAddressByName",
 		"GetProcAddressByHash",
+		"GetProcAddressByHashML",
 		"GetProcAddressOriginal",
-		"GetMetrics",
 		"ExitProcess",
+
+		"GetPEB",
+		"GetTEB",
+		"GetIMOML",
+
+		"GetMetrics",
 
 		"AS_GetValue",
 		"AS_GetPointer",
