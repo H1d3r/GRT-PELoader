@@ -167,6 +167,7 @@ func testRuntimeAPI() {
 	fmt.Printf("Original VirtualAlloc: 0x%X\n", ret)
 	fmt.Printf("Hooked   VirtualAlloc: 0x%X\n", VirtualAlloc)
 
+	// don't worry, we can use after, it is a fake handle
 	err = GleamRT.Release()
 	checkError(err)
 
@@ -176,6 +177,14 @@ func testRuntimeAPI() {
 	fmt.Printf("msvcrt.malloc: 0x%X\n", proc.Addr())
 	proc = dll.NewProc("free")
 	fmt.Printf("msvcrt.free:   0x%X\n", proc.Addr())
+	fmt.Println()
+
+	// check ucrtbase.dll
+	dll = syscall.NewLazyDLL("ucrtbase.dll")
+	proc = dll.NewProc("malloc")
+	fmt.Printf("ucrtbase.malloc: 0x%X\n", proc.Addr())
+	proc = dll.NewProc("free")
+	fmt.Printf("ucrtbase.free:   0x%X\n", proc.Addr())
 	fmt.Println()
 }
 
