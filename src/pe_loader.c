@@ -59,15 +59,14 @@ typedef struct {
 
     // store PE image information
     uintptr PEImage;
-    uintptr DataDir;
     uintptr EntryPoint;
     uintptr ImageBase;
     uint32  ImageSize;
     uintptr Section;
 
-    // store PE image NT header
     Image_FileHeader     FileHeader;
     Image_OptionalHeader OptHeader;
+    Image_DataDirectory* DataDirectory;
 
     // store info need fixed when execute
     uintptr ExportTable;
@@ -587,32 +586,23 @@ static bool parsePEImage(PELoader* loader)
         return false;
     }
     // skip DOS stub
-    uint32  peOffset = *(uint32*)(imageAddr + DOS_HEADER_SIZE - 4);
-    uintptr peBase = imageAddr + peOffset + NT_HEADER_SIGNATURE_SIZE;
-    // parse FileHeader
-    Image_FileHeader* fileHeader = (Image_FileHeader*)(peBase);
+    uint32 hdrOffset = *(uint32*)(imageAddr + DOS_HEADER_SIZE - 4);
+    // parse PE headers
+    Image_NTHeaders*      ntHeaders  = (Image_NTHeaders*)(imageAddr + hdrOffset);
+    Image_FileHeader*     fileHeader = &ntHeaders->FileHeader;
+    Image_OptionalHeader* optHeader  = &ntHeaders->OptionalHeader;
     // check is a executable image
     WORD characteristics = fileHeader->Characteristics;
     if (!(characteristics & IMAGE_FILE_EXECUTABLE_IMAGE))
     {
         return false;
     }
-    // erase timestamp in file header
-    fileHeader->TimeDateStamp = 0;
-    // parse OptionalHeader
-    uintptr headerAddr = peBase + sizeof(Image_FileHeader);
-#ifdef _WIN64
-    Image_OptionalHeader* optHeader = (Image_OptionalHeader64*)(headerAddr);
-#elif _WIN32
-    Image_OptionalHeader* optHeader = (Image_OptionalHeader32*)(headerAddr);
-#endif
-    // calculate data directory offset
-    uint16  ddOffset = arrlen(optHeader->DataDirectory) * sizeof(Image_DataDirectory);
-    uintptr dataDir  = headerAddr + sizeof(Image_OptionalHeader) - ddOffset;
     // calculate the address of the first Section
-    uintptr section = headerAddr + sizeof(Image_OptionalHeader);
-    // store result
-    loader->DataDir    = dataDir;
+    uintptr fileAddr = imageAddr + hdrOffset + sizeof(ntHeaders->Signature);
+    uintptr optAddr  = fileAddr + sizeof(Image_FileHeader);
+    uint32  optSize  = fileHeader->SizeOfOptionalHeader;
+    uintptr section  = optAddr + optSize;
+    // store parse result
     loader->EntryPoint = optHeader->AddressOfEntryPoint;
     loader->ImageBase  = optHeader->ImageBase;
     loader->ImageSize  = optHeader->SizeOfImage;
@@ -621,6 +611,10 @@ static bool parsePEImage(PELoader* loader)
     loader->OptHeader  = *optHeader;
     loader->IsDLL      = characteristics & IMAGE_FILE_DLL;
     loader->IsFixed    = characteristics & IMAGE_FILE_RELOCS_STRIPPED;
+    // store data directory
+    loader->DataDirectory = &optHeader->DataDirectory;
+    // erase timestamp in file header
+    fileHeader->TimeDateStamp = 0;
     return true;
 }
 
@@ -698,10 +692,8 @@ static bool fixRelocTable(PELoader* loader)
     {
         return true;
     }
-    uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_BASERELOC * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
+    Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+    uintptr peImage    = loader->PEImage;
     uintptr relocTable = peImage + dd.VirtualAddress;
     uint32  tableSize  = dd.Size;
     // check need relocation
@@ -751,10 +743,8 @@ static bool fixRelocTable(PELoader* loader)
 
 static bool initTLSDirectory(PELoader* loader)
 {
-    uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_TLS * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
+    Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    uintptr peImage   = loader->PEImage;
     uintptr tlsTable  = peImage + dd.VirtualAddress;
     uint32  tableSize = dd.Size;
     // check need initialize tls callback
@@ -798,16 +788,14 @@ static bool initTLSDirectory(PELoader* loader)
 
 static void prepareExportTable(PELoader* loader)
 {
+    Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
     uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_EXPORT * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
 
     loader->ExportTable     = peImage + dd.VirtualAddress;
     loader->ExportTableSize = dd.Size;
 
     // erase timestamp in PE image
-    if (loader->ExportTableSize == 0)
+    if (dd.Size == 0)
     {
         return;
     }
@@ -817,10 +805,8 @@ static void prepareExportTable(PELoader* loader)
 
 static void prepareImportTable(PELoader* loader)
 {
+    Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
     uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_IMPORT * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
 
     loader->ImportTable     = peImage + dd.VirtualAddress;
     loader->ImportTableSize = dd.Size;
@@ -844,10 +830,8 @@ static void prepareImportTable(PELoader* loader)
 
 static void prepareDelayImportTable(PELoader* loader)
 {
+    Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT];
     uintptr peImage = loader->PEImage;
-    uintptr dataDir = loader->DataDir;
-    uintptr ddAddr  = dataDir + IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT * PE_DATA_DIRECTORY_SIZE;
-    Image_DataDirectory dd = *(Image_DataDirectory*)(ddAddr);
 
     loader->DelayImportTable     = peImage + dd.VirtualAddress;
     loader->DelayImportTableSize = dd.Size;
