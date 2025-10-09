@@ -128,7 +128,7 @@ func testRuntimeAPI() {
 		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
 		checkError(err)
 		if dllProcAddr != getProcAddr {
-			log.Fatalln("unexpected proc address")
+			log.Fatalln("unexpected procedure address")
 		}
 		fmt.Printf("%s: 0x%X\n", proc, dllProcAddr)
 	}
@@ -150,6 +150,7 @@ func testRuntimeAPI() {
 	GetProcAddress := modKernel32.NewProc("GetProcAddress").Addr()
 	fmt.Printf("Original GetProcAddress: 0x%X\n", ret)
 	fmt.Printf("Hooked   GetProcAddress: 0x%X\n", GetProcAddress)
+	fmt.Println()
 
 	// get original VirtualAlloc
 	procName, err = syscall.BytePtrFromString("VirtualAlloc")
@@ -166,20 +167,18 @@ func testRuntimeAPI() {
 	checkError(err)
 	fmt.Printf("Original VirtualAlloc: 0x%X\n", ret)
 	fmt.Printf("Hooked   VirtualAlloc: 0x%X\n", VirtualAlloc)
+	fmt.Println()
 
 	// don't worry, we can use after, it is a fake handle
 	err = GleamRT.Release()
 	checkError(err)
 
-	// check msvcrt.dll
+	// load msvcrt.dll and ucrtbase.dll then not release them
 	dll := syscall.NewLazyDLL("msvcrt.dll")
 	proc := dll.NewProc("malloc")
-	fmt.Printf("msvcrt.malloc: 0x%X\n", proc.Addr())
+	fmt.Printf("msvcrt.malloc:   0x%X\n", proc.Addr())
 	proc = dll.NewProc("free")
-	fmt.Printf("msvcrt.free:   0x%X\n", proc.Addr())
-	fmt.Println()
-
-	// check ucrtbase.dll
+	fmt.Printf("msvcrt.free:     0x%X\n", proc.Addr())
 	dll = syscall.NewLazyDLL("ucrtbase.dll")
 	proc = dll.NewProc("malloc")
 	fmt.Printf("ucrtbase.malloc: 0x%X\n", proc.Addr())
