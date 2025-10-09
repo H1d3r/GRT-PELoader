@@ -7,10 +7,6 @@
 
 #define DOS_HEADER_SIZE 64
 
-#define NT_HEADER_SIGNATURE_SIZE 4
-#define PE_SECTION_HEADER_SIZE   40
-#define PE_DATA_DIRECTORY_SIZE   8
-
 #define IMAGE_FILE_MACHINE_I386  0x014C
 #define IMAGE_FILE_MACHINE_AMD64 0x8664
 
@@ -141,6 +137,12 @@ typedef struct {
 #elif _WIN32
     typedef Image_OptionalHeader32 Image_OptionalHeader;
 #endif
+
+typedef struct {
+    DWORD                Signature;
+    Image_FileHeader     FileHeader;
+    Image_OptionalHeader OptionalHeader;
+} Image_NTHeaders;
 
 typedef struct {
     BYTE  Name[8];
