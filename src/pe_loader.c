@@ -572,11 +572,11 @@ static errno loadPEImage(PELoader* loader)
 static bool parsePEImage(PELoader* loader)
 {
     uintptr imageAddr = (uintptr)(loader->Config.Image);
-    // check image file header
     if (imageAddr == 0)
     {
         return false;
     }
+    // check image file header
     if ((*(byte*)(imageAddr+0)^0x7C) != ('M'^0x7C))
     {
         return false;
@@ -597,6 +597,8 @@ static bool parsePEImage(PELoader* loader)
     {
         return false;
     }
+    // erase timestamp in file header
+    fileHeader->TimeDateStamp = 0;
     // calculate the address of the first Section
     uintptr fileAddr = imageAddr + hdrOffset + sizeof(ntHeaders->Signature);
     uintptr optAddr  = fileAddr + sizeof(Image_FileHeader);
@@ -612,9 +614,7 @@ static bool parsePEImage(PELoader* loader)
     loader->IsDLL      = characteristics & IMAGE_FILE_DLL;
     loader->IsFixed    = characteristics & IMAGE_FILE_RELOCS_STRIPPED;
     // store data directory
-    loader->DataDirectory = &optHeader->DataDirectory;
-    // erase timestamp in file header
-    fileHeader->TimeDateStamp = 0;
+    loader->DataDirectory = optHeader->DataDirectory;
     return true;
 }
 
