@@ -185,6 +185,12 @@ func testRuntimeAPI() {
 	proc = dll.NewProc("free")
 	fmt.Printf("ucrtbase.free:   0x%X\n", proc.Addr())
 	fmt.Println()
+
+	// load and free library for trigger flush Windows API cache
+	hMSVCRT, err := windows.LoadLibrary("msvcrt.dll")
+	checkError(err)
+	err = windows.FreeLibrary(hMSVCRT)
+	checkError(err)
 }
 
 var globalVar = 12345678
