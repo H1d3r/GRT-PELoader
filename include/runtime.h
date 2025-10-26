@@ -93,7 +93,7 @@ typedef struct {
     int64 NumFiles;
     int64 NumDirectories;
     int64 NumIOCPs;
-    int64 NumKeys;
+    int64 NumRegKeys;
     int64 NumSockets;
 } RT_Status;
 #endif // MOD_RESOURCE_H
@@ -177,11 +177,11 @@ typedef struct {
 
 #endif // WIN_HTTP_H
 
+typedef void  (*HTTPInit_t)(HTTP_Request* req);
 typedef errno (*HTTPGet_t)(HTTP_Request* req, HTTP_Response* resp);
 typedef errno (*HTTPPost_t)(HTTP_Request* req, HTTP_Response* resp);
 typedef errno (*HTTPDo_t)(UTF16 method, HTTP_Request* req, HTTP_Response* resp);
-typedef void  (*HTTPInit_t)(HTTP_Request* req);
-typedef errno (*HTTPFree_t)();
+typedef errno (*HTTPFreeDLL_t)();
 
 // ================================WinCrypto================================
 
@@ -222,6 +222,7 @@ typedef errno (*CryptoRSASign_t)(ALG_ID aid, databuf* data, databuf* key, databu
 typedef errno (*CryptoRSAVerify_t)(ALG_ID aid, databuf* data, databuf* key, databuf* sign);
 typedef errno (*CryptoRSAEncrypt_t)(databuf* data, databuf* key, databuf* output);
 typedef errno (*CryptoRSADecrypt_t)(databuf* data, databuf* key, databuf* output);
+typedef errno (*CryptoFreeDLL_t)();
 
 // =================================Runtime=================================
 
@@ -450,8 +451,9 @@ typedef struct {
         ResUnlockWaitableTimer_t UnlockWaitableTimer;
         ResLockFile_t            LockFile;
         ResUnlockFile_t          UnlockFile;
-        ResGetStatus_t           Status;
-        ResFreeAllMu_t           FreeAll;
+
+        ResGetStatus_t Status;
+        ResFreeAllMu_t FreeAll;
     } Resource;
 
     struct {
@@ -484,12 +486,12 @@ typedef struct {
     } WinFile;
     
     struct {
+        HTTPInit_t Init;
         HTTPGet_t  Get;
         HTTPPost_t Post;
         HTTPDo_t   Do;
 
-        HTTPInit_t Init;
-        HTTPFree_t Free;
+        HTTPFreeDLL_t FreeDLL;
     } WinHTTP;
 
     struct {
@@ -504,6 +506,8 @@ typedef struct {
         CryptoRSAVerify_t  RSAVerify;
         CryptoRSAEncrypt_t RSAEncrypt;
         CryptoRSADecrypt_t RSADecrypt;
+
+        CryptoFreeDLL_t FreeDLL;
     } WinCrypto;
 
     struct {
