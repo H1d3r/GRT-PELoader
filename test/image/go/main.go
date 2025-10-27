@@ -13,6 +13,8 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"reflect"
 	"syscall"
 	"time"
@@ -73,6 +75,13 @@ func main() {
 	testWatchdog()
 	testGetMetric()
 	kernel32Sleep()
+
+	go func() {
+		signalCh := make(chan os.Signal, 1)
+		signal.Notify(signalCh, os.Interrupt)
+		<-signalCh
+		os.Exit(0)
+	}()
 
 	for {
 		fmt.Println("keep alive")
