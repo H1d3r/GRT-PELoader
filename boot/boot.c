@@ -331,7 +331,7 @@ static void* loadImageFromHTTP(Runtime_M* runtime, byte* config)
         SetLastErrno(ERR_INVALID_PE_IMAGE);
         return NULL;
     }
-    runtime->WinHTTP.Free();
+    runtime->WinHTTP.FreeDLL();
     return resp.Body.buf;
 }
 
