@@ -103,6 +103,9 @@ func TestHTTPInstance(t *testing.T) {
 		err = server.Serve(listener)
 		require.NoError(t, err)
 	}()
+	defer func() {
+		_ = server.Close()
+	}()
 
 	headers := make(http.Header)
 	headers.Set("Header1", "h1")
