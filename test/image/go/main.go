@@ -20,10 +20,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/RSSU-Shellcode/GRT-Develop/metric"
 	"github.com/davecgh/go-spew/spew"
-
 	"golang.org/x/sys/windows"
+
+	"github.com/RSSU-Shellcode/GRT-Develop/metric"
 )
 
 var (
@@ -99,17 +99,18 @@ func testRuntimeAPI() {
 
 	// find runtime methods
 	for _, proc := range []string{
-		"GetProcAddressByName",
-		"GetProcAddressByHash",
-		"GetProcAddressByHashML",
-		"GetProcAddressOriginal",
-		"ExitProcess",
+		"RT_GetProcAddressByName",
+		"RT_GetProcAddressByHash",
+		"RT_GetProcAddressByHashML",
+		"RT_GetProcAddressOriginal",
 
-		"GetPEB",
-		"GetTEB",
-		"GetIMOML",
+		"RT_GetPEB",
+		"RT_GetTEB",
+		"RT_GetIMOML",
 
-		"GetMetrics",
+		"RT_GetMetrics",
+		"RT_Sleep",
+		"RT_ExitProcess",
 
 		"AS_GetValue",
 		"AS_GetPointer",
@@ -122,16 +123,17 @@ func testRuntimeAPI() {
 		"IS_Delete",
 		"IS_DeleteAll",
 
-		"SM_Pause",
-		"SM_Continue",
+		"DT_Detect",
+		"DT_Status",
 
+		"SM_Status",
+
+		"WD_SetHandler",
 		"WD_Kick",
 		"WD_Enable",
 		"WD_Disable",
 		"WD_IsEnabled",
-		"WD_SetHandler",
-		"WD_Pause",
-		"WD_Continue",
+		"WD_Status",
 	} {
 		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
 		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
@@ -144,7 +146,7 @@ func testRuntimeAPI() {
 	fmt.Println()
 
 	// get original GetProcAddress
-	GetProcAddressOriginal, err := windows.GetProcAddress(hGleamRT, "GetProcAddressOriginal")
+	GetProcAddressOriginal, err := windows.GetProcAddress(hGleamRT, "RT_GetProcAddressOriginal")
 	checkError(err)
 	procName, err := syscall.BytePtrFromString("GetProcAddress")
 	checkError(err)
@@ -401,7 +403,7 @@ func testGetMetric() {
 		return
 	}
 
-	GetMetrics := GleamRT.MustFindProc("GetMetrics")
+	GetMetrics := GleamRT.MustFindProc("RT_GetMetrics")
 	go func() {
 		for {
 			metrics := metric.Metrics{}
