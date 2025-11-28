@@ -37,6 +37,7 @@ bool TestInitPELoader()
     if (runtime == NULL)
     {
         printf_s("failed to initialize runtime: 0x%X\n", GetLastErrno());
+        panic(PANIC_UNREACHABLE_CODE);
         return false;
     }
 
@@ -114,6 +115,7 @@ bool TestInitPELoader()
     if (pe_loader == NULL)
     {
         printf_s("failed to initialize PE loader: 0x%X\n", GetLastErrno());
+        panic(PANIC_UNREACHABLE_CODE);
         return false;
     }
     // erase PE image after initialize
