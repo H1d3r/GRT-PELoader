@@ -80,6 +80,7 @@ func main() {
 		signalCh := make(chan os.Signal, 1)
 		signal.Notify(signalCh, os.Interrupt)
 		<-signalCh
+		fmt.Println("received interrupt signal")
 		os.Exit(0)
 	}()
 
