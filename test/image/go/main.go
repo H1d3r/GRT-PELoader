@@ -127,14 +127,14 @@ func testRuntimeAPI() {
 		"DT_Detect",
 		"DT_Status",
 
-		"SM_Status",
-
 		"WD_SetHandler",
 		"WD_Kick",
 		"WD_Enable",
 		"WD_Disable",
 		"WD_IsEnabled",
 		"WD_Status",
+
+		"SM_Status",
 	} {
 		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
 		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
@@ -412,7 +412,7 @@ func testGetMetric() {
 			if ret != noError {
 				log.Fatalf("failed to get runtime metrics: 0x%X\n", ret)
 			}
-			spew.Dump(metrics)
+			fmt.Println(spew.Sdump(metrics))
 			time.Sleep(3 * time.Second)
 		}
 	}()
