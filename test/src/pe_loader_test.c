@@ -27,8 +27,8 @@ bool TestInitPELoader()
 
     Runtime_Opts opts = {
         .BootInstAddress     = NULL,
-        .DisableSysmon       = false,
         .DisableWatchdog     = false,
+        .DisableSysmon       = false,
         .NotEraseInstruction = false,
         .NotAdjustProtect    = false,
         .TrackCurrentThread  = false,
