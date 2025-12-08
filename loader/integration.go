@@ -129,10 +129,10 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	instance.addr = instAddr
 	instance.data = instData
 	// load instance
-	ptr, _, err := syscall.SyscallN(instAddr)
+	ptr, _, e := syscall.SyscallN(instAddr)
 	if ptr == null {
 		_ = instance.free()
-		return nil, fmt.Errorf("failed to load instance: 0x%X", err)
+		return nil, fmt.Errorf("failed to load instance: 0x%X", int(e))
 	}
 	instance.PELoaderM = NewPELoader(ptr)
 	return &instance, nil
