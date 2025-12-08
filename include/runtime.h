@@ -21,8 +21,8 @@
 
 #define OPT_OFFSET_ENABLE_SECURITY_MODE  1
 #define OPT_OFFSET_DISABLE_DETECTOR      2
-#define OPT_OFFSET_DISABLE_SYSMON        3
-#define OPT_OFFSET_DISABLE_WATCHDOG      4
+#define OPT_OFFSET_DISABLE_WATCHDOG      3
+#define OPT_OFFSET_DISABLE_SYSMON        4
 #define OPT_OFFSET_NOT_ERASE_INSTRUCTION 5
 #define OPT_OFFSET_NOT_ADJUST_PROTECT    6
 #define OPT_OFFSET_TRACK_CURRENT_THREAD  7
@@ -247,16 +247,30 @@ typedef errno (*CryptoFreeDLL_t)();
 // =================================Runtime=================================
 
 // about random module
-typedef BOOL   (*RandBool_t)(uint64 seed);
-typedef byte   (*RandByte_t)(uint64 seed);
+typedef uint64 (*RandSeed_t)();
 typedef int    (*RandInt_t)(uint64 seed);
-typedef uint   (*RandUint_t)(uint64 seed);
+typedef int8   (*RandInt8_t)(uint64 seed);
+typedef int16  (*RandInt16_t)(uint64 seed);
+typedef int32  (*RandInt32_t)(uint64 seed);
 typedef int64  (*RandInt64_t)(uint64 seed);
+typedef uint   (*RandUint_t)(uint64 seed);
+typedef uint8  (*RandUint8_t)(uint64 seed);
+typedef uint16 (*RandUint16_t)(uint64 seed);
+typedef uint32 (*RandUint32_t)(uint64 seed);
 typedef uint64 (*RandUint64_t)(uint64 seed);
 typedef int    (*RandIntN_t)(uint64 seed, int n);
-typedef uint   (*RandUintN_t)(uint64 seed, uint n);
+typedef int8   (*RandInt8N_t)(uint64 seed, int8 n);
+typedef int16  (*RandInt16N_t)(uint64 seed, int16 n);
+typedef int32  (*RandInt32N_t)(uint64 seed, int32 n);
 typedef int64  (*RandInt64N_t)(uint64 seed, int64 n);
+typedef uint   (*RandUintN_t)(uint64 seed, uint n);
+typedef uint8  (*RandUint8N_t)(uint64 seed, uint8 n);
+typedef uint16 (*RandUint16N_t)(uint64 seed, uint16 n);
+typedef uint32 (*RandUint32N_t)(uint64 seed, uint32 n);
 typedef uint64 (*RandUint64N_t)(uint64 seed, uint64 n);
+typedef byte   (*RandByte_t)(uint64 seed);
+typedef bool   (*RandBool_t)(uint64 seed);
+typedef BOOL   (*RandBOOL_t)(uint64 seed);
 typedef void   (*RandBuffer_t)(void* buf, int64 size);
 typedef void   (*RandSequence_t)(int* array, int n);
 
@@ -308,8 +322,8 @@ typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 #define SERIALIZE_FLAG_VALUE   0x00000000
 #define SERIALIZE_FLAG_POINTER 0x80000000
 
-#define SERIALIZE_MASK_FLAG   0x80000000
-#define SERIALIZE_MASK_LENGTH 0x7FFFFFFF
+#define SERIALIZE_MASK_FLAG    0x80000000
+#define SERIALIZE_MASK_LENGTH  0x7FFFFFFF
 
 #endif // SERIALIZE_H
 
@@ -322,15 +336,32 @@ typedef BOOL   (*Unserialize_t)(void* serialized, void* data);
 // The return value is the number of results scanned, if failed to
 // scan, it will return -1, use the GetLastErrno for get error code.
 // 
+// BinToPattern is used to convert binary data to pattern for MemScan.
+// The pattern buffer size must greater the [data size * 3 + 1].
+// 
 // [WARNING]
 // You need to manually exclude certain scan results, such as the "value"
 // stored in the stack as a argument for MemScanByValue.
 // 
 // example:
+//   MemScan_Cfg config = {
+//      .Pattern = "F1 ?2 ?? A?",
+//      .Protect = PAGE_READWRITE|PAGE_EXECUTE_READ,
+//      .Type    = MEM_PRIVATE|MEM_IMAGE,
+//   };
 //   uintptr results[10];
-//   MemScanByPattern("F1 F2 ?? A1", results, arrlen(results));
+//   MemScanByConfig(&config, results, arrlen(results));
+
+#ifndef MEM_SCANNER_H
+typedef struct {
+    byte* Pattern;
+    DWORD Protect; // default PAGE_READWRITE
+    DWORD Type;    // default MEM_PRIVATE
+} MemScan_Cfg;
+#endif // MEM_SCANNER_H
+
 typedef uint (*MemScanByValue_t)(void* value, uint size, uintptr* results, uint maxItem);
-typedef uint (*MemScanByPattern_t)(byte* pattern, uintptr* results, uint maxItem);
+typedef uint (*MemScanByConfig_t)(MemScan_Cfg* config, uintptr* results, uint maxItem);
 typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
 
 // GetProcByName and GetProcByHash are use HashAPI module for
@@ -344,21 +375,6 @@ typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
 typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, BOOL redirect);
 typedef void* (*GetProcByHash_t)(uint mHash, uint pHash, uint hKey, BOOL redirect);
 typedef void* (*GetProcByHashML_t)(void* list, uint mHash, uint pHash, uint hKey, BOOL redirect);
-
-// about sysmon
-#ifndef SYSMON_H
-typedef struct {
-    BOOL  IsEnabled;
-    int32 Reserved;
-    int64 NumNormal;
-    int64 NumRecover;
-    int64 NumPanic;
-} SM_Status;
-#endif // SYSMON_H
-
-typedef BOOL  (*SMGetStatus_t)(SM_Status* status);
-typedef errno (*SMPause_t)();
-typedef errno (*SMContinue_t)();
 
 // about watchdog
 #ifndef WATCHDOG_H
@@ -381,6 +397,21 @@ typedef void  (*WDSetHandler_t)(WDHandler_t handler);
 typedef BOOL  (*WDGetStatus_t)(WD_Status* status);
 typedef errno (*WDPause_t)();
 typedef errno (*WDContinue_t)();
+
+// about sysmon
+#ifndef SYSMON_H
+typedef struct {
+    BOOL  IsEnabled;
+    int32 Reserved;
+    int64 NumNormal;
+    int64 NumRecover;
+    int64 NumPanic;
+} SM_Status;
+#endif // SYSMON_H
+
+typedef BOOL  (*SMGetStatus_t)(SM_Status* status);
+typedef errno (*SMPause_t)();
+typedef errno (*SMContinue_t)();
 
 // about process environment
 //
@@ -411,8 +442,8 @@ typedef struct {
     TT_Status Thread;
     RT_Status Resource;
     DT_Status Detector;
-    SM_Status Sysmon;
     WD_Status Watchdog;
+    SM_Status Sysmon;
 } Runtime_Metrics;
 
 typedef errno (*RTSleepHR_t)(uint32 milliseconds);
@@ -542,16 +573,30 @@ typedef struct {
     } WinCrypto;
 
     struct {
-        RandBool_t     Bool;
-        RandByte_t     Byte;
+        RandSeed_t     Seed;
         RandInt_t      Int;
-        RandUint_t     Uint;
+        RandInt8_t     Int8;
+        RandInt16_t    Int16;
+        RandInt32_t    Int32;
         RandInt64_t    Int64;
+        RandUint_t     Uint;
+        RandUint8_t    Uint8;
+        RandUint16_t   Uint16;
+        RandUint32_t   Uint32;
         RandUint64_t   Uint64;
         RandIntN_t     IntN;
-        RandUintN_t    UintN;
+        RandInt8N_t    Int8N;
+        RandInt16N_t   Int16N;
+        RandInt32N_t   Int32N;
         RandInt64N_t   Int64N;
+        RandUintN_t    UintN;
+        RandUint8N_t   Uint8N;
+        RandUint16N_t  Uint16N;
+        RandUint32N_t  Uint32N;
         RandUint64N_t  Uint64N;
+        RandByte_t     Byte;
+        RandBool_t     Bool;
+        RandBOOL_t     BOOL;
         RandBuffer_t   Buffer;
         RandSequence_t Sequence;
     } Random;
@@ -573,7 +618,7 @@ typedef struct {
 
     struct {
         MemScanByValue_t   ScanByValue;
-        MemScanByPattern_t ScanByPattern;
+        MemScanByConfig_t  ScanByConfig;
         BinToPattern_t     BinToPattern;
     } MemScanner;
 
@@ -589,14 +634,6 @@ typedef struct {
     } Detector;
 
     struct {
-        SMGetStatus_t Status;
-
-        // only for test, NOT use it.
-        SMPause_t    _Pause;
-        SMContinue_t _Continue;
-    } Sysmon;
-
-    struct {
         WDSetHandler_t SetHandler;
         WDKick_t       Kick;
         WDEnable_t     Enable;
@@ -608,6 +645,14 @@ typedef struct {
         WDPause_t    _Pause;
         WDContinue_t _Continue;
     } Watchdog;
+
+    struct {
+        SMGetStatus_t Status;
+
+        // only for test, NOT use it.
+        SMPause_t    _Pause;
+        SMContinue_t _Continue;
+    } Sysmon;
 
     struct {
         GetPEB_t   GetPEB;
@@ -647,12 +692,12 @@ typedef struct {
     // disable detector for test or debug.
     bool DisableDetector;
 
-    // disable sysmon for implement single thread model.
-    bool DisableSysmon;
-
     // disable watchdog for implement single thread model.
     // it will overwrite the control from upper module.
     bool DisableWatchdog;
+
+    // disable sysmon for implement single thread model.
+    bool DisableSysmon;
 
     // not erase runtime instructions after call Runtime_M.Exit
     bool NotEraseInstruction;
