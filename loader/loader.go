@@ -123,7 +123,7 @@ func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PEL
 		addr, uintptr(unsafe.Pointer(runtime)), uintptr(unsafe.Pointer(config)),
 	) // #nosec
 	if ptr == null {
-		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", err)
+		return nil, fmt.Errorf("failed to initialize PE Loader: 0x%X", int(err))
 	}
 	return NewPELoader(ptr), nil
 }
