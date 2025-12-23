@@ -10,7 +10,7 @@ require (
 
 	golang.org/x/sys v0.29.0
 
-	github.com/RSSU-Shellcode/Gleam-RT v0.0.0-20251128050633-38b4664dbd43
+	github.com/RSSU-Shellcode/Gleam-RT v0.0.0-20251223043915-faad194eb4f0
 )
 
 require (
