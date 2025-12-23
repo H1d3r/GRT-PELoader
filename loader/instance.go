@@ -43,51 +43,51 @@ type Image interface {
 // Options contains options about create instance.
 type Options struct {
 	// set the custom loader template.
-	Template []byte
+	Template []byte `toml:"template" json:"template"`
 
 	// set the custom image name about the command line prefix.
-	ImageName string
+	ImageName string `toml:"image_name" json:"image_name"`
 
 	// set the command line argument about the image.
-	CommandLine string
+	CommandLine string `toml:"cmd_line" json:"cmd_line"`
 
 	// wait main thread exit, if it is an exe image.
-	WaitMain bool
+	WaitMain bool `toml:"wait_main" json:"wait_main"`
 
 	// if failed to load library, can continue it.
-	AllowSkipDLL bool
+	AllowSkipDLL bool `toml:"allow_skip_dll" json:"allow_skip_dll"`
 
 	// create NUL file for set StdInput, StdOutput and
 	// StdError for ignore console input/output.
 	// If it is true, it will overwrite standard handles.
-	IgnoreStdIO bool
+	IgnoreStdIO bool `toml:"ignore_stdio" json:"ignore_stdio"`
 
 	// set standard handles for hook GetStdHandle,
 	// if them are NULL, call original GetStdHandle.
-	StdInput  uint64
-	StdOutput uint64
-	StdError  uint64
+	StdInput  uint64 `toml:"std_input"  json:"std_input"`
+	StdOutput uint64 `toml:"std_output" json:"std_output"`
+	StdError  uint64 `toml:"std_error"  json:"std_error"`
 
 	// not running PE image after load.
-	NotAutoRun bool
+	NotAutoRun bool `toml:"not_auto_run" json:"not_auto_run"`
 
 	// not stop runtime when call ExitProcess.
-	NotStopRuntime bool
+	NotStopRuntime bool `toml:"not_stop_runtime" json:"not_stop_runtime"`
 
 	// set Gleam-RT options, usually keep the default value.
-	Runtime option.Options
+	Runtime option.Options `toml:"runtime" json:"runtime"`
 
 	// set additional arguments for upper PE image.
 	// all the ID must greater than 64.
-	Arguments []*argument.Arg
+	Arguments []*argument.Arg `toml:"arguments" json:"arguments"`
 
 	// for interactive with current program.
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	Stdin  io.Reader `toml:"-" json:"-"`
+	Stdout io.Writer `toml:"-" json:"-"`
+	Stderr io.Writer `toml:"-" json:"-"`
 
-	// if this program is running on GleamRT, must enable it.
-	OnRuntime bool
+	// if current program is running on GleamRT, must enable it.
+	OnRuntime bool `toml:"-" json:"-"`
 }
 
 // CreateInstance is used to create instance from PE Loader template.
