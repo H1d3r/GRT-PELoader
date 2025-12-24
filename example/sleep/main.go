@@ -6,29 +6,19 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/windows"
-)
-
-var (
-	modKernel32 = windows.NewLazyDLL("kernel32.dll")
-
-	procSleep = modKernel32.NewProc("Sleep")
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime"
 )
 
 func main() {
 	data := strings.Repeat("secret", 1)
 
 	for i := 0; i < 3; i++ {
-		sleep(time.Second)
+		err := gleamrt.Sleep(time.Second)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("sleep complete")
 	}
 
 	fmt.Println(data)
-}
-
-func sleep(d time.Duration) {
-	ret, _, _ := procSleep.Call(uintptr(d.Milliseconds()))
-	if ret != 0 {
-		log.Fatalf("sleep returned errno: 0x%X\n", ret)
-	}
 }
