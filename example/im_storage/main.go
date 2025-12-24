@@ -6,19 +6,8 @@ import (
 	"log"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime/storage"
 )
-
-// GleamRT is a virtual dll for get runtime methods.
-var GleamRT *windows.DLL
-
-func init() {
-	var err error
-	GleamRT, err = windows.LoadDLL("GleamRT.dll")
-	if err != nil {
-		panic("failed to load virtual runtime dll")
-	}
-}
 
 func main() {
 	setValue()
@@ -29,96 +18,58 @@ func main() {
 }
 
 func setValue() {
-	SetValue := GleamRT.MustFindProc("IMS_SetValue")
-
 	data := []byte{0x01, 0x02, 0x03, 0x04}
 
-	id := int32(0)
-	ret, _, _ := SetValue.Call(
-		uintptr(id), uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)),
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("failed to set value")
+	err := storage.SetValue(0, data)
+	if err != nil {
+		log.Printf("failed to set value to id 0: %s", err)
 	}
 	fmt.Println("set value:", data)
 }
 
 func getValue() {
-	GetValue := GleamRT.MustFindProc("IMS_GetValue")
-
-	id := int32(0)
-	var size uint
-	ret, _, _ := GetValue.Call(
-		uintptr(id), 0, uintptr(unsafe.Pointer(&size)),
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("failed to get value size")
-	}
-
-	data := make([]byte, size)
-	ret, _, _ = GetValue.Call(
-		uintptr(id), uintptr(unsafe.Pointer(&data[0])), 0,
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("failed to get value")
+	data, err := storage.GetValue(0)
+	if err != nil {
+		log.Printf("failed to get value with id 0: %s", err)
 	}
 
 	expected := []byte{0x01, 0x02, 0x03, 0x04}
 	if !bytes.Equal(expected, data) {
-		log.Fatalln("get value with incorrect data")
+		log.Fatal("get value with incorrect data")
 	}
-
 	fmt.Println("get value:", data)
 }
 
 func getPointer() {
-	GetPointer := GleamRT.MustFindProc("IMS_GetPointer")
-
-	id := int32(0)
-	var (
-		pointer *byte
-		size    uint32
-	)
-	ret, _, _ := GetPointer.Call(
-		uintptr(id), uintptr(unsafe.Pointer(&pointer)),
-		uintptr(unsafe.Pointer(&size)),
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("invalid value id")
+	pointer, size, err := storage.GetPointer(0)
+	if err != nil {
+		log.Fatal("failed to get pointer:", err)
 	}
-	fmt.Println("pointer:", pointer)
-	fmt.Println("size:", size)
+	fmt.Printf("pointer: 0x%X\n", pointer)
+	fmt.Println("size:   ", size)
 
-	data := unsafe.Slice(pointer, size) // #nosec
+	data := unsafe.Slice((*byte)(unsafe.Pointer(pointer)), size) // #nosec
 	expected := []byte{0x01, 0x02, 0x03, 0x04}
 	if !bytes.Equal(expected, data) {
-		log.Fatalln("get value with incorrect data")
+		log.Fatalln("get pointer with incorrect data")
 	}
-	fmt.Println("get value:", data)
+	fmt.Println("get pointer:", data)
 }
 
 func deleteVal() {
-	Delete := GleamRT.MustFindProc("IMS_Delete")
-
-	id := int32(0)
-	ret, _, _ := Delete.Call(uintptr(id))
-	if ret == 0 {
-		log.Fatalln("invalid value id")
+	err := storage.Delete(0)
+	if err != nil {
+		log.Fatal("failed to delete value:", err)
 	}
-
-	ret, _, _ = Delete.Call(uintptr(id))
-	if ret == 1 {
-		log.Fatalln("invalid value id")
+	err = storage.Delete(0)
+	if err == nil {
+		log.Fatal("delete value twice")
 	}
-	fmt.Println("delete value:", id)
 }
 
 func deleteAll() {
-	DeleteAll := GleamRT.MustFindProc("IMS_DeleteAll")
-
-	ret, _, _ := DeleteAll.Call()
-	if ret == 0 {
-		log.Fatalln("failed to delete all data")
+	err := storage.DeleteAll()
+	if err != nil {
+		log.Fatal("failed to delete all:", err)
 	}
-	fmt.Println("delete all data")
 }
