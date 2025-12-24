@@ -5,19 +5,10 @@ import (
 	"log"
 	"unsafe"
 
-	"golang.org/x/sys/windows"
+	"github.com/RSSU-Shellcode/Gleam-RT/runtime/argument"
 )
 
-// GleamRT is a virtual dll for get runtime methods.
-var GleamRT *windows.DLL
-
-func init() {
-	var err error
-	GleamRT, err = windows.LoadDLL("GleamRT.dll")
-	if err != nil {
-		panic("failed to load virtual runtime dll")
-	}
-}
+// arg id 2 is CommandLineA
 
 func main() {
 	getValue()
@@ -27,76 +18,33 @@ func main() {
 }
 
 func getValue() {
-	GetValue := GleamRT.MustFindProc("AS_GetValue")
-
-	id := uint32(2) // CommandLineA
-	var size uint32
-	ret, _, _ := GetValue.Call(
-		uintptr(id), 0, uintptr(unsafe.Pointer(&size)),
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("invalid argument id")
+	cmd, ok := argument.GetValue(2)
+	if !ok {
+		log.Fatal("failed to get CommandLineA")
 	}
-
-	value := make([]byte, size)
-	ret, _, _ = GetValue.Call(
-		uintptr(id), uintptr(unsafe.Pointer(&value[0])), 0,
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("invalid argument id")
-	}
-
-	fmt.Println("size:", size)
-	fmt.Println("value:", string(value))
-	fmt.Println("raw:", value)
+	fmt.Println("cmd:", string(cmd))
 }
 
 func getPointer() {
-	GetPointer := GleamRT.MustFindProc("AS_GetPointer")
-
-	id := uint32(2) // CommandLineA
-	var (
-		pointer *byte
-		size    uint32
-	)
-	ret, _, _ := GetPointer.Call(
-		uintptr(id), uintptr(unsafe.Pointer(&pointer)),
-		uintptr(unsafe.Pointer(&size)),
-	) // #nosec
-	if ret == 0 {
-		log.Fatalln("invalid argument id")
+	pointer, size, ok := argument.GetPointer(2)
+	if !ok {
+		log.Fatal("failed to get CommandLineA pointer")
 	}
+	fmt.Printf("pointer: 0x%X\n", pointer)
+	fmt.Println("size:   ", size)
 
-	fmt.Println("pointer:", pointer)
-	fmt.Println("size:", size)
-
-	arg := unsafe.Slice(pointer, size) // #nosec
-	fmt.Println("data:", string(arg))
-	fmt.Println("raw:", arg)
+	arg := unsafe.Slice((*byte)(unsafe.Pointer(pointer)), size) // #nosec
+	fmt.Println("cmd:", string(arg))
 }
 
 func erase() {
-	Erase := GleamRT.MustFindProc("AS_Erase")
-
-	id := uint32(1) // CommandLineA
-	ret, _, _ := Erase.Call(uintptr(id))
-	if ret == 0 {
-		log.Fatalln("failed to erase argument")
+	if !argument.Erase(1) {
+		log.Fatal("failed to erase argument with id: 1")
 	}
-	fmt.Println("erase:", ret)
-
-	ret, _, _ = Erase.Call(uintptr(id))
-	if ret == 0 {
-		log.Fatalln("failed to erase argument")
-	}
+	fmt.Println("erase argument with id: 1")
 }
 
 func eraseAll() {
-	EraseAll := GleamRT.MustFindProc("AS_EraseAll")
-
-	ret, _, _ := EraseAll.Call()
-	if ret == 0 {
-		log.Fatalln("failed to erase all argument")
-	}
-	fmt.Println("erase all")
+	argument.EraseAll()
+	fmt.Println("erase all arguments")
 }
