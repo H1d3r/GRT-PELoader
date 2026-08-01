@@ -1,15 +1,16 @@
 #include "c_types.h"
 #include "win_types.h"
+#include "win_structs.h"
 #include "dll_kernel32.h"
-#include "dll_shell32.h"
 #include "dll_msvcrt.h"
 #include "dll_ucrtbase.h"
+#include "dll_shell32.h"
 #include "lib_memory.h"
 #include "lib_string.h"
+#include "hash_api.h"
 #include "rel_addr.h"
 #include "pe_image.h"
 #include "win_api.h"
-#include "random.h"
 #include "errno.h"
 #include "runtime.h"
 #include "pe_loader.h"
@@ -22,28 +23,35 @@ typedef struct {
     Runtime_M*   Runtime;
     PELoader_Cfg Config;
 
+    // store runtime option
+    bool NotEraseInstruction;
+    bool NotAdjustProtect;
+
     // process environment
-    void* IMOML;
+    PEB* PEB; // process environment block
+    PML* PML; // process module list (snapshot)
+
+    // core dll address
+    HMODULE hKernel32;
 
     // API addresses
-    VirtualAlloc_t          VirtualAlloc;
-    VirtualFree_t           VirtualFree;
-    VirtualProtect_t        VirtualProtect;
-    LoadLibraryA_t          LoadLibraryA;
-    FreeLibrary_t           FreeLibrary;
-    GetProcAddress_t        GetProcAddress;
-    CreateThread_t          CreateThread;
-    ExitThread_t            ExitThread;
-    FlushInstructionCache_t FlushInstructionCache;
-    CreateMutexA_t          CreateMutexA;
-    ReleaseMutex_t          ReleaseMutex;
-    WaitForSingleObject_t   WaitForSingleObject;
-    CreateFileA_t           CreateFileA;
-    CloseHandle_t           CloseHandle;
-    GetCommandLineA_t       GetCommandLineA;
-    GetCommandLineW_t       GetCommandLineW;
-    LocalFree_t             LocalFree;
-    GetStdHandle_t          GetStdHandle;
+    VirtualAlloc_t        VirtualAlloc;
+    VirtualFree_t         VirtualFree;
+    VirtualProtect_t      VirtualProtect;
+    LoadLibraryA_t        LoadLibraryA;
+    FreeLibrary_t         FreeLibrary;
+    GetProcAddress_t      GetProcAddress;
+    CreateThread_t        CreateThread;
+    ExitThread_t          ExitThread;
+    CreateMutexA_t        CreateMutexA;
+    ReleaseMutex_t        ReleaseMutex;
+    WaitForSingleObject_t WaitForSingleObject;
+    CreateFileA_t         CreateFileA;
+    CloseHandle_t         CloseHandle;
+    GetCommandLineA_t     GetCommandLineA;
+    GetCommandLineW_t     GetCommandLineW;
+    LocalFree_t           LocalFree;
+    GetStdHandle_t        GetStdHandle;
 
     // loader context
     void* MainMemPage; // store all structures
@@ -98,34 +106,21 @@ typedef struct {
 } PELoader;
 
 // PE loader methods
-void* LDR_GetProc(LPSTR name);
+void* LDR_GetProc(byte* name);
 uint  LDR_ExitCode();
 errno LDR_Start();
 errno LDR_Wait();
 errno LDR_Execute();
-errno LDR_Exit(uint exitCode);
+errno LDR_Exit(uint32 exitCode);
 errno LDR_Destroy();
 
-// hard encoded address in getPELoaderPointer for replacement
-#ifdef _WIN64
-    #define PE_LOADER_POINTER 0x7FABCDEF222222FF
-#elif _WIN32
-    #define PE_LOADER_POINTER 0x7FAB22FF
-#endif
 static PELoader* getPELoaderPointer();
 
-static bool ldr_lock();
-static bool ldr_unlock();
-static bool ldr_lock_status();
-static bool ldr_unlock_status();
-
-static void* allocPELoaderMemPage(PELoader_Cfg* config);
+static void* allocMainMemPage(Runtime_M* runtime, PELoader_Cfg* config);
 static bool  initPELoaderAPI(PELoader* loader);
 static bool  adjustPageProtect(PELoader* loader, DWORD* old);
 static bool  recoverPageProtect(PELoader* loader, DWORD protect);
-static bool  updatePELoaderPointer(PELoader* loader);
-static bool  recoverPELoaderPointer(PELoader* loader);
-static errno initPELoaderEnvironment(PELoader* loader);
+static errno initPELoaderEnv(PELoader* loader);
 static errno loadPEImage(PELoader* loader);
 static bool  parsePEImage(PELoader* loader);
 static bool  checkPEImage(PELoader* loader);
@@ -137,9 +132,14 @@ static void  prepareImportTable(PELoader* loader);
 static void  prepareDelayImportTable(PELoader* loader);
 static bool  backupPEImage(PELoader* loader);
 static bool  lockMainMemPage(PELoader* loader);
-static bool  flushInstructionCache(PELoader* loader);
 static void  erasePELoaderMethods(PELoader* loader);
 static errno cleanPELoader(PELoader* loader);
+static void  setPELoaderPointer(PELoader* loader);
+
+static bool ldr_lock();
+static bool ldr_unlock();
+static bool ldr_lock_status();
+static bool ldr_unlock_status();
 
 static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName);
@@ -156,9 +156,8 @@ static void  ldr_tls_callback(DWORD dwReason);
 static void  ldr_register_exit(void* func);
 static void  ldr_do_exit();
 static void  ldr_exit_process(UINT uExitCode);
+static void  ldr_pointer_stub();
 static void  ldr_epilogue();
-
-static HMODULE ldr_load_module(LPSTR name);
 
 static void pe_entry_point();
 static bool pe_dll_main(DWORD dwReason, bool setExitCode);
@@ -237,24 +236,36 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
         return NULL;
     }
     // alloc memory for store loader structure
-    void* memPage = allocPELoaderMemPage(config);
+    void* memPage = allocMainMemPage(runtime, config);
     if (memPage == NULL)
     {
-        SetLastErrno(ERR_LOADER_ALLOC_MEMORY);
+        SetLastErrno(ERR_LOADER_ALLOC_MAIN_MEM_PAGE);
         return NULL;
     }
     // set structure address
     uintptr address = (uintptr)memPage;
-    uintptr loaderAddr = address + 1000 + RandUintN(address, 128);
-    uintptr moduleAddr = address + 3000 + RandUintN(address, 128);
+    uintptr loaderAddr = address + 1000 + runtime->Random.UintN(address, 128);
+    uintptr moduleAddr = address + 3000 + runtime->Random.UintN(address, 128);
     // allocate loader memory
     PELoader* loader = (PELoader*)loaderAddr;
     mem_init(loader, sizeof(PELoader));
+    // copy loader configuration
+    mem_copy(&loader->Config, config, sizeof(PELoader_Cfg));
+    // store runtime option
+    Runtime_Opts opts = {
+        .NotEraseInstruction = false,
+        .NotAdjustProtect    = false,
+    };
+    runtime->Core.Options(&opts);
+    loader->NotEraseInstruction = opts.NotEraseInstruction;
+    loader->NotAdjustProtect    = opts.NotAdjustProtect;
     // store process environment
-    loader->IMOML = runtime->Env.GetIMOML();
+    loader->PEB = runtime->Env.GetPEB();
+    loader->PML = runtime->Env.GetPML();
+    // store core dll handle
+    loader->hKernel32 = runtime->DLL.GetKernel32();
     // store config and context
     loader->Runtime = runtime;
-    loader->Config  = *config;
     loader->MainMemPage = memPage;
     // initialize loader
     DWORD oldProtect = 0;
@@ -271,12 +282,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
             errno = ERR_LOADER_ADJUST_PROTECT;
             break;
         }
-        if (!updatePELoaderPointer(loader))
-        {
-            errno = ERR_LOADER_UPDATE_PTR;
-            break;
-        }
-        errno = initPELoaderEnvironment(loader);
+        errno = initPELoaderEnv(loader);
         if (errno != NO_ERROR)
         {
             break;
@@ -293,7 +299,7 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
         }
         if (!lockMainMemPage(loader))
         {
-            errno = ERR_LOADER_LOCK_MAIN_MEM;
+            errno = ERR_LOADER_LOCK_MAIN_MEM_PAGE;
             break;
         }
         break;
@@ -302,16 +308,13 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     {
         erasePELoaderMethods(loader);
     }
+    setPELoaderPointer(loader);
     if (oldProtect != 0)
     {
         if (!recoverPageProtect(loader, oldProtect) && errno == NO_ERROR)
         {
             errno = ERR_LOADER_RECOVER_PROTECT;
         }
-    }
-    if (errno == NO_ERROR && !flushInstructionCache(loader))
-    {
-        errno = ERR_LOADER_FLUSH_INST;
     }
     if (errno != NO_ERROR)
     {
@@ -340,30 +343,29 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     return module;
 }
 
-static void* allocPELoaderMemPage(PELoader_Cfg* config)
+static void* allocMainMemPage(Runtime_M* runtime, PELoader_Cfg* config)
 {
 #ifdef _WIN64
-    uint mHash = 0x7CCA6C542E19FE5E;
     uint pHash = 0xAA8D188A1F0862DC;
     uint hKey  = 0x6EDC8B580ACA6913;
 #elif _WIN32
-    uint mHash = 0x67F47A59;
     uint pHash = 0xA7CFDD6F;
     uint hKey  = 0x0F2BB61F;
 #endif
-    VirtualAlloc_t virtualAlloc = config->FindAPI(mHash, pHash, hKey);
+    HMODULE hKernel32 = runtime->DLL.GetKernel32();
+    VirtualAlloc_t virtualAlloc = config->FindAPI(hKernel32, pHash, hKey);
     if (virtualAlloc == NULL)
     {
         return NULL;
     }
     SIZE_T size = MAIN_MEM_PAGE_SIZE;
-    size += (1 + RandUintN(0, 16)) * 4096;
+    size += (1 + runtime->Random.UintN(0, 16)) * 4096;
     LPVOID addr = virtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (addr == NULL)
     {
         return NULL;
     }
-    RandBuffer(addr, (int64)size);
+    runtime->Random.Buffer(addr, (int64)size);
     dbg_log("[PE Loader]", "Main Memory Page: 0x%zX", addr);
     return addr;
 }
@@ -371,56 +373,54 @@ static void* allocPELoaderMemPage(PELoader_Cfg* config)
 static bool initPELoaderAPI(PELoader* loader)
 {
     typedef struct { 
-        uint mHash; uint pHash; uint hKey; void* proc;
+        uint pHash; uint hKey; void* proc;
     } winapi;
     winapi list[] =
 #ifdef _WIN64
     {
-        { 0xE76D4D058E866C8F, 0xA0A93FC801DCA874, 0xDC0D07D21838938D }, // VirtualAlloc
-        { 0x1526279269733B87, 0x502A741BB71E85B4, 0x723D605A7B2777B4 }, // VirtualFree
-        { 0x00240DCC9E809327, 0x9DE9DCDBC168BCB5, 0xAEAB0A9DE37E8DA5 }, // VirtualProtect
-        { 0x62B29DA273DB4961, 0x765460317300B27F, 0x45EC64F6B9C67579 }, // LoadLibraryA
-        { 0x9323F1E932AB1CC7, 0x4F1C84C32514C065, 0x4163AE252BE32A0A }, // FreeLibrary
-        { 0x4342614F4E42F23B, 0x28E536A81B0E5FBC, 0x112B9FA92C790A9F }, // GetProcAddress
-        { 0xD3005CC424AD992F, 0x915A9A67F9624C94, 0x0286C91B1146AA8A }, // CreateThread
-        { 0xA9181B4769675A0D, 0x4437AAD530C05680, 0x255CF8D04E88F38F }, // ExitThread
-        { 0x901D40CD2AF4F156, 0x1D27674B4B5A849A, 0xEB434A8027309B2B }, // FlushInstructionCache
-        { 0x0263CBDEA4A84D63, 0x1A72BB5222C92A04, 0x290DD2AD7712F521 }, // CreateMutexA
-        { 0xA2BEF0DE50706AE1, 0x60538A615A3DC39D, 0x26A74F6C0A6DA07C }, // ReleaseMutex
-        { 0xFC442D256BDAE85F, 0x62BCB99CC882FABE, 0x14529C2202547DB1 }, // WaitForSingleObject
-        { 0xC50C116838885095, 0xC9FC614CEC6418EA, 0xEB95F0FFDD9A0164 }, // CreateFileA
-        { 0x22AD28552539A1A9, 0x59F5D1E90A85FD71, 0x76C1F7E62CED2080 }, // CloseHandle
-        { 0x74B117A381995B72, 0x60ED37D97353DEB7, 0xDC1DBF0237B732AE }, // GetCommandLineA
-        { 0x1D21E8324BDA6293, 0x57D3F898478FF91F, 0xA7ADC351AF5C208F }, // GetCommandLineW
-        { 0xD6E1E0452B9A4800, 0xC292CD4CFBA787F8, 0x2E76D6A9ADA85FD2 }, // LocalFree
-        { 0x7AFC6DFC16A6BD24, 0x9A283FBDAD1BBE92, 0x1F174C21E88F2DD4 }, // GetStdHandle
+        { 0xA0A93FC801DCA874, 0xDC0D07D21838938D }, // VirtualAlloc
+        { 0x502A741BB71E85B4, 0x723D605A7B2777B4 }, // VirtualFree
+        { 0x9DE9DCDBC168BCB5, 0xAEAB0A9DE37E8DA5 }, // VirtualProtect
+        { 0x765460317300B27F, 0x45EC64F6B9C67579 }, // LoadLibraryA
+        { 0x4F1C84C32514C065, 0x4163AE252BE32A0A }, // FreeLibrary
+        { 0x28E536A81B0E5FBC, 0x112B9FA92C790A9F }, // GetProcAddress
+        { 0x915A9A67F9624C94, 0x0286C91B1146AA8A }, // CreateThread
+        { 0x4437AAD530C05680, 0x255CF8D04E88F38F }, // ExitThread
+        { 0x1A72BB5222C92A04, 0x290DD2AD7712F521 }, // CreateMutexA
+        { 0x60538A615A3DC39D, 0x26A74F6C0A6DA07C }, // ReleaseMutex
+        { 0x62BCB99CC882FABE, 0x14529C2202547DB1 }, // WaitForSingleObject
+        { 0xC9FC614CEC6418EA, 0xEB95F0FFDD9A0164 }, // CreateFileA
+        { 0x59F5D1E90A85FD71, 0x76C1F7E62CED2080 }, // CloseHandle
+        { 0x60ED37D97353DEB7, 0xDC1DBF0237B732AE }, // GetCommandLineA
+        { 0x57D3F898478FF91F, 0xA7ADC351AF5C208F }, // GetCommandLineW
+        { 0xC292CD4CFBA787F8, 0x2E76D6A9ADA85FD2 }, // LocalFree
+        { 0x9A283FBDAD1BBE92, 0x1F174C21E88F2DD4 }, // GetStdHandle
     };
 #elif _WIN32
     {
-        { 0x7C350141, 0x689AA1E3, 0x3A5308D4 }, // VirtualAlloc
-        { 0x8A03B77F, 0x640BD6A8, 0x64EA9AC2 }, // VirtualFree
-        { 0xDD4119D9, 0x3077A74E, 0x7155ED28 }, // VirtualProtect
-        { 0x73563EF7, 0xB04095D2, 0x6468B59D }, // LoadLibraryA
-        { 0x9C0AD7F5, 0xF25AB58A, 0xD32B963C }, // FreeLibrary
-        { 0x521818B4, 0x76C5A295, 0xC8390D32 }, // GetProcAddress
-        { 0xFDFE0471, 0xDDAFACA6, 0x6E386ED3 }, // CreateThread
-        { 0x648DA93C, 0xC8B01CF6, 0xE6D32B90 }, // ExitThread
-        { 0x86E7C29B, 0x5BD90FC5, 0x2B213815 }, // FlushInstructionCache
-        { 0x8C83799F, 0x96AB272A, 0x5D0E1AAA }, // CreateMutexA
-        { 0x2A5936B2, 0xA260CC33, 0xC242D9C7 }, // ReleaseMutex
-        { 0x2B3F0504, 0x209FAE3F, 0x98BFE3BF }, // WaitForSingleObject
-        { 0x3C823683, 0x4E5E3A68, 0x16B42ABE }, // CreateFileA
-        { 0x33877578, 0xC92AF0C7, 0xED67E11B }, // CloseHandle
-        { 0x53778EF8, 0x21E3793F, 0x15F9DE4B }, // GetCommandLineA
-        { 0x07BE85A7, 0xC5B2807C, 0x223C7896 }, // GetCommandLineW
-        { 0x0E9AD1DF, 0x8935E1E7, 0x891771CD }, // LocalFree
-        { 0xE0CC0466, 0xD7AB6E7F, 0x9EAFCC67 }, // GetStdHandle
+        { 0x689AA1E3, 0x3A5308D4 }, // VirtualAlloc
+        { 0x640BD6A8, 0x64EA9AC2 }, // VirtualFree
+        { 0x3077A74E, 0x7155ED28 }, // VirtualProtect
+        { 0xB04095D2, 0x6468B59D }, // LoadLibraryA
+        { 0xF25AB58A, 0xD32B963C }, // FreeLibrary
+        { 0x76C5A295, 0xC8390D32 }, // GetProcAddress
+        { 0xDDAFACA6, 0x6E386ED3 }, // CreateThread
+        { 0xC8B01CF6, 0xE6D32B90 }, // ExitThread
+        { 0x96AB272A, 0x5D0E1AAA }, // CreateMutexA
+        { 0xA260CC33, 0xC242D9C7 }, // ReleaseMutex
+        { 0x209FAE3F, 0x98BFE3BF }, // WaitForSingleObject
+        { 0x4E5E3A68, 0x16B42ABE }, // CreateFileA
+        { 0xC92AF0C7, 0xED67E11B }, // CloseHandle
+        { 0x21E3793F, 0x15F9DE4B }, // GetCommandLineA
+        { 0xC5B2807C, 0x223C7896 }, // GetCommandLineW
+        { 0x8935E1E7, 0x891771CD }, // LocalFree
+        { 0xD7AB6E7F, 0x9EAFCC67 }, // GetStdHandle
     };
 #endif
     for (int i = 0; i < arrlen(list); i++)
     {
         winapi item = list[i];
-        void*  proc = loader->Config.FindAPI(item.mHash, item.pHash, item.hKey);
+        void*  proc = loader->Config.FindAPI(loader->hKernel32, item.pHash, item.hKey);
         if (proc == NULL)
         {
             return false;
@@ -428,70 +428,27 @@ static bool initPELoaderAPI(PELoader* loader)
         list[i].proc = proc;
     }
 
-    loader->VirtualAlloc          = list[0x00].proc;
-    loader->VirtualFree           = list[0x01].proc;
-    loader->VirtualProtect        = list[0x02].proc;
-    loader->LoadLibraryA          = list[0x03].proc;
-    loader->FreeLibrary           = list[0x04].proc;
-    loader->GetProcAddress        = list[0x05].proc;
-    loader->CreateThread          = list[0x06].proc;
-    loader->ExitThread            = list[0x07].proc;
-    loader->FlushInstructionCache = list[0x08].proc;
-    loader->CreateMutexA          = list[0x09].proc;
-    loader->ReleaseMutex          = list[0x0A].proc;
-    loader->WaitForSingleObject   = list[0x0B].proc;
-    loader->CreateFileA           = list[0x0C].proc;
-    loader->CloseHandle           = list[0x0D].proc;
-    loader->GetCommandLineA       = list[0x0E].proc;
-    loader->GetCommandLineW       = list[0x0F].proc;
-    loader->LocalFree             = list[0x10].proc;
-    loader->GetStdHandle          = list[0x11].proc;
+    loader->VirtualAlloc        = list[0x00].proc;
+    loader->VirtualFree         = list[0x01].proc;
+    loader->VirtualProtect      = list[0x02].proc;
+    loader->LoadLibraryA        = list[0x03].proc;
+    loader->FreeLibrary         = list[0x04].proc;
+    loader->GetProcAddress      = list[0x05].proc;
+    loader->CreateThread        = list[0x06].proc;
+    loader->ExitThread          = list[0x07].proc;
+    loader->CreateMutexA        = list[0x08].proc;
+    loader->ReleaseMutex        = list[0x09].proc;
+    loader->WaitForSingleObject = list[0x0A].proc;
+    loader->CreateFileA         = list[0x0B].proc;
+    loader->CloseHandle         = list[0x0C].proc;
+    loader->GetCommandLineA     = list[0x0D].proc;
+    loader->GetCommandLineW     = list[0x0E].proc;
+    loader->LocalFree           = list[0x0F].proc;
+    loader->GetStdHandle        = list[0x10].proc;
     return true;
 }
 
-// CANNOT merge updatePELoaderPointer and recoverPELoaderPointer
-// to one function with two arguments, otherwise the compiler
-// will generate the incorrect instructions.
-
-static bool updatePELoaderPointer(PELoader* loader)
-{
-    bool success = false;
-    uintptr target = (uintptr)(GetFuncAddr(&getPELoaderPointer));
-    for (uintptr i = 0; i < 64; i++)
-    {
-        uintptr* pointer = (uintptr*)(target);
-        if (*pointer != PE_LOADER_POINTER)
-        {
-            target++;
-            continue;
-        }
-        *pointer = (uintptr)loader;
-        success = true;
-        break;
-    }
-    return success;
-}
-
-static bool recoverPELoaderPointer(PELoader* loader)
-{
-    bool success = false;
-    uintptr target = (uintptr)(GetFuncAddr(&getPELoaderPointer));
-    for (uintptr i = 0; i < 64; i++)
-    {
-        uintptr* pointer = (uintptr*)(target);
-        if (*pointer != (uintptr)loader)
-        {
-            target++;
-            continue;
-        }
-        *pointer = PE_LOADER_POINTER;
-        success = true;
-        break;
-    }
-    return success;
-}
-
-static errno initPELoaderEnvironment(PELoader* loader)
+static errno initPELoaderEnv(PELoader* loader)
 {
     // create global mutex
     HANDLE hMutex = loader->CreateMutexA(NULL, false, NAME_LDR_MUTEX_GLOBAL);
@@ -609,12 +566,13 @@ static bool parsePEImage(PELoader* loader)
     loader->ImageBase  = optHeader->ImageBase;
     loader->ImageSize  = optHeader->SizeOfImage;
     loader->Section    = section;
-    loader->FileHeader = *fileHeader;
-    loader->OptHeader  = *optHeader;
     loader->IsDLL      = characteristics & IMAGE_FILE_DLL;
     loader->IsFixed    = characteristics & IMAGE_FILE_RELOCS_STRIPPED;
     // store data directory
     loader->DataDirectory = optHeader->DataDirectory;
+    // use mem_copy for reduce instruction size
+    mem_copy(&loader->FileHeader, fileHeader, sizeof(Image_FileHeader));
+    mem_copy(&loader->OptHeader, optHeader, sizeof(Image_OptionalHeader));
     return true;
 }
 
@@ -646,7 +604,7 @@ static bool mapSections(PELoader* loader)
     // append random memory size to image tail
     uint64 seed = (uint64)(GetFuncAddr(&InitPELoader));
     uint32 size = loader->ImageSize;
-    size += (uint32)((1 + RandUintN(seed, 128)) * 4096);
+    size += (uint32)((1 + loader->Runtime->Random.UintN(seed, 128)) * 4096);
     // allocate memory for map PE image
     void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     if (mem == NULL)
@@ -737,12 +695,14 @@ static bool fixRelocTable(PELoader* loader)
         relocTable += baseReloc->SizeOfBlock;
     }
     // destroy table for prevent extract raw PE image
-    RandBuffer(tableAddr, tableSize);
+    loader->Runtime->Random.Buffer(tableAddr, tableSize);
     return true;
 }
 
 static bool initTLSDirectory(PELoader* loader)
 {
+    Runtime_M* runtime = loader->Runtime;
+
     Image_DataDirectory dd = loader->DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
     uintptr peImage   = loader->PEImage;
     uintptr tlsTable  = peImage + dd.VirtualAddress;
@@ -758,13 +718,13 @@ static bool initTLSDirectory(PELoader* loader)
     uint size  = tls->EndAddressOfRawData - tls->StartAddressOfRawData;
     uint total = 16 + size + tls->SizeOfZeroFill;
     // allocate memory for save tls template data
-    uint  pSize = total + (uint)((1 + RandUintN((uint64)tls, 8)) * 4096);
+    uint  pSize = total + (uint)((1 + runtime->Random.UintN((uint64)tls, 8)) * 4096);
     void* block = loader->VirtualAlloc(NULL, pSize, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (block == NULL)
     {
         return false;
     }
-    RandBuffer(block, (int64)size);
+    runtime->Random.Buffer(block, (int64)size);
     loader->TLSBlock = block;
     loader->TLSLen   = total;
 #ifndef NO_RUNTIME
@@ -781,8 +741,8 @@ static bool initTLSDirectory(PELoader* loader)
     // record tls callback list
     loader->TLSList = (TLSCallback_t*)(tls->AddressOfCallBacks);
     // destroy tls template data and tls table for prevent extract raw PE image
-    RandBuffer((byte*)(tls->StartAddressOfRawData), size);
-    RandBuffer((byte*)tlsTable, tableSize);
+    runtime->Random.Buffer((byte*)(tls->StartAddressOfRawData), size);
+    runtime->Random.Buffer((byte*)tlsTable, tableSize);
     return true;
 }
 
@@ -856,17 +816,19 @@ static void prepareDelayImportTable(PELoader* loader)
 // backupPEImage is used to execute PE image multi times.
 static bool backupPEImage(PELoader* loader)
 {
+    Runtime_M* runtime = loader->Runtime;
+
     // append random memory size to tail
     uint64 seed = (uint64)(GetFuncAddr(&InitPELoader)) + 4096;
     uint32 size = loader->ImageSize;
-    size += (uint32)((1 + RandUintN(seed, 128)) * 4096);
+    size += (uint32)((1 + runtime->Random.UintN(seed, 128)) * 4096);
     // allocate memory for backup PE image
     void* mem = loader->VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     if (mem == NULL)
     {
         return false;
     }
-    RandBuffer(mem, (int64)size);
+    runtime->Random.Buffer(mem, (int64)size);
     loader->PEBackup = mem;
     // copy mapped PE image
     mem_copy(mem, (void*)(loader->PEImage), loader->ImageSize);
@@ -891,59 +853,25 @@ static bool lockMainMemPage(PELoader* loader)
     return true;
 }
 
-static bool flushInstructionCache(PELoader* loader)
-{
-    uintptr begin = (uintptr)(GetFuncAddr(&InitPELoader));
-    uintptr end   = (uintptr)(GetFuncAddr(&ldr_epilogue));
-    uint    size  = end - begin;
-    return loader->FlushInstructionCache(CURRENT_PROCESS, (LPCVOID)begin, size);
-}
-
 __declspec(noinline)
 static void erasePELoaderMethods(PELoader* loader)
 {
-    if (loader->Config.NotEraseInstruction)
+    if (loader->NotEraseInstruction)
     {
         return;
     }
-    uintptr begin = (uintptr)(GetFuncAddr(&allocPELoaderMemPage));
+    uintptr begin = (uintptr)(GetFuncAddr(&allocMainMemPage));
     uintptr end   = (uintptr)(GetFuncAddr(&erasePELoaderMethods));
     uintptr size  = end - begin;
-    RandBuffer((byte*)begin, (int64)size);
+    loader->Runtime->Random.Buffer((byte*)begin, (int64)size);
 }
 
 // ======================== these instructions will not be erased ========================
 
-// change memory protect for dynamic update pointer that hard encode.
-__declspec(noinline)
-static bool adjustPageProtect(PELoader* loader, DWORD* old)
-{
-    if (loader->Config.NotAdjustProtect)
-    {
-        return true;
-    }
-    uintptr begin = (uintptr)(GetFuncAddr(&InitPELoader));
-    uintptr end   = (uintptr)(GetFuncAddr(&ldr_epilogue));
-    uint    size  = end - begin;
-    return loader->VirtualProtect((void*)begin, size, PAGE_EXECUTE_READWRITE, old);
-}
-
-__declspec(noinline)
-static bool recoverPageProtect(PELoader* loader, DWORD protect)
-{
-    if (loader->Config.NotAdjustProtect)
-    {
-        return true;
-    }
-    uintptr begin = (uintptr)(GetFuncAddr(&InitPELoader));
-    uintptr end   = (uintptr)(GetFuncAddr(&ldr_epilogue));
-    uint    size  = end - begin;
-    DWORD   old;
-    return loader->VirtualProtect((void*)begin, size, protect, &old);
-}
-
 static errno cleanPELoader(PELoader* loader)
 {
+    Runtime_M* runtime = loader->Runtime;
+
     errno errno = NO_ERROR;
 
     CloseHandle_t closeHandle = loader->CloseHandle;
@@ -987,7 +915,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for PE image
         if (peImage != NULL)
         {
-            RandBuffer(peImage, loader->ImageSize);
+            runtime->Random.Buffer(peImage, loader->ImageSize);
             if (!virtualFree(peImage, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_PE_IMAGE;
@@ -996,7 +924,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for PE image backup
         if (peBackup != NULL)
         {
-            RandBuffer(peBackup, loader->ImageSize);
+            runtime->Random.Buffer(peBackup, loader->ImageSize);
             if (!virtualFree(peBackup, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_PE_IMAGE_BACKUP;
@@ -1005,7 +933,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for TLS block template
         if (tlsBlock != NULL)
         {
-            RandBuffer(tlsBlock, loader->TLSLen);
+            runtime->Random.Buffer(tlsBlock, loader->TLSLen);
             if (!virtualFree(tlsBlock, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_TLS_BLOCK;
@@ -1014,7 +942,7 @@ static errno cleanPELoader(PELoader* loader)
         // release main memory page
         if (memPage != NULL)
         {
-            RandBuffer(memPage, MAIN_MEM_PAGE_SIZE);
+            runtime->Random.Buffer(memPage, MAIN_MEM_PAGE_SIZE);
             if (!virtualFree(memPage, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_MAIN_MEM;
@@ -1024,15 +952,44 @@ static errno cleanPELoader(PELoader* loader)
     return errno;
 }
 
-// updatePELoaderPointer will replace hard encode address to the actual address.
-// Must disable compiler optimize, otherwise updatePELoaderPointer will fail.
-#pragma optimize("", off)
+__declspec(noinline)
+static bool adjustPageProtect(PELoader* loader, DWORD* old)
+{
+    if (loader->NotAdjustProtect)
+    {
+        return true;
+    }
+    uintptr begin = (uintptr)(GetFuncAddr(&InitPELoader));
+    uintptr end   = (uintptr)(GetFuncAddr(&ldr_epilogue));
+    uint    size  = end - begin;
+    return loader->VirtualProtect((void*)begin, size, PAGE_EXECUTE_READWRITE, old);
+}
+
+__declspec(noinline)
+static bool recoverPageProtect(PELoader* loader, DWORD protect)
+{
+    if (loader->NotAdjustProtect)
+    {
+        return true;
+    }
+    uintptr begin = (uintptr)(GetFuncAddr(&InitPELoader));
+    uintptr end   = (uintptr)(GetFuncAddr(&ldr_epilogue));
+    uint    size  = end - begin;
+    DWORD   old;
+    return loader->VirtualProtect((void*)begin, size, protect, &old);
+}
+
+static void setPELoaderPointer(PELoader* loader)
+{
+    uintptr stub = (uintptr)GetFuncAddr(&ldr_pointer_stub);
+    *(PELoader**)(stub + 4) = loader;
+}
+
 static PELoader* getPELoaderPointer()
 {
-    uintptr pointer = PE_LOADER_POINTER;
-    return (PELoader*)(pointer);
+    uintptr stub = (uintptr)GetFuncAddr(&ldr_pointer_stub);
+    return *(PELoader**)(stub + 4);
 }
-#pragma optimize("", on)
 
 __declspec(noinline)
 static bool ldr_lock()
@@ -1079,41 +1036,54 @@ static bool ldr_unlock_status()
 __declspec(noinline)
 void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
-    // process ordinal import
-    if (lpProcName < (LPCSTR)(0xFFFF))
-    {
-        dbg_log("[PE Loader]", "GetProcAddressByOrdinal: %d", lpProcName);
-        return loader->GetProcAddress(hModule, lpProcName);
-    }
-    dbg_log("[PE Loader]", "GetProcAddress: %s", lpProcName);
-    // use "mem_init" for prevent incorrect compiler
-    // optimize and generate incorrect shellcode
-    uint16 module[MAX_PATH];
-    mem_init(module, sizeof(module));
-    // get module file name
+    // try to get procedure address
     if (hModule == HMODULE_GLEAM_RT)
     {
-        uint16 mod[] = {
-            L'G', L'l', L'e', L'a', L'm', L'R', L'T', 
-            L'.', L'd', L'l', L'l', 0x0000,
-        };
-        mem_copy(module, mod, sizeof(mod));
+        dbg_log("[PE Loader]", "Get Runtime Method: %s", lpProcName);
+        return loader->GetProcAddress(hModule, lpProcName);
+    }
+    if (lpProcName <= (LPCSTR)(0xFFFF))
+    {
+        dbg_log("[PE Loader]", "GetProcAddressByOrdinal: %d", lpProcName);
     } else {
-        if (GetModuleFileName(loader->IMOML, hModule, module, sizeof(module)) == 0)
+        dbg_log("[PE Loader]", "GetProcAddress: %s", lpProcName);
+    }
+    void* proc = loader->GetProcAddress(hModule, lpProcName);
+    if (proc == NULL)
+    {
+        return NULL;
+    }
+    // get process module list snapshot
+    PML* pml = runtime->Env.GetPML();
+    // use "mem_init" for prevent incorrect compiler
+    // optimize and generate incorrect template
+    uint16 modName[MAX_PATH];
+    mem_init(modName, sizeof(modName));
+    // get dll base name for calculate module hash
+    if (GetModuleBaseName(pml, hModule, modName, MAX_PATH) == 0)
+    {
+        SetLastErrno(ERR_LOADER_MODULE_NOT_FOUND);
+        return NULL;
+    }
+    // if lpProcName is a ordinal, get procedure name
+    if (lpProcName <= (LPCSTR)(0xFFFF))
+    {
+        lpProcName = GetProcedureName(pml, hModule, proc);
+        if (lpProcName == NULL)
         {
-            SetLastErrno(ERR_LOADER_NOT_FOUND_MODULE);
-            return NULL;
+            return proc;
         }
     }
-    // check is PE Loader internal method or hook
-    void* hook = ldr_get_hooks(module, lpProcName);
+    // check is PE Loader internal method or need hook
+    void* hook = ldr_get_hooks(modName, lpProcName);
     if (hook != NULL)
     {
         return hook;
     }
-    return loader->GetProcAddress(hModule, lpProcName);
+    return proc;
 }
 
 __declspec(noinline)
@@ -1277,6 +1247,7 @@ static bool ldr_copy_image()
     return ldr_unlock_status();
 }
 
+// TODO rewrite it about address
 __declspec(noinline)
 static void* ldr_process_export(LPSTR name)
 {
@@ -1300,27 +1271,26 @@ static void* ldr_process_export(LPSTR name)
     DWORD* aof = (DWORD*)(peImage + export->AddressOfFunctions);
     DWORD* aon = (DWORD*)(peImage + export->AddressOfNames);
     WORD*  aoo = (WORD* )(peImage + export->AddressOfNameOrdinals);
-    DWORD base = export->Base;
     // try to find procedure address
     void* address = NULL;
     if (name <= (LPSTR)(0xFFFF))
     {
         // get procedure address by ordinal
-        DWORD ordi = (DWORD)(uintptr)(name);
-        if (ordi - base <= export->NumberOfFunctions)
+        DWORD ordi = (DWORD)(uintptr)(name) - export->Base;
+        if (ordi < export->NumberOfFunctions)
         {
-            address = (void*)(peImage + (uintptr)(aof[ordi-base]));
+            address = (void*)(peImage + (uintptr)(aof[ordi]));
         }
     } else {
         // get procedure address by name
-        for (uint32 i = base; i < export->NumberOfNames + base; i++)
+        for (uint32 i = 0; i < export->NumberOfNames; i++)
         {
-            LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i-base]));
-            if (strcmp_a(fn, name) != 0)
+            LPSTR fn = (LPSTR)(peImage + (uintptr)(aon[i]));
+            if (!strequ_a(fn, name))
             {
                 continue;
             }
-            address = (void*)(peImage + (uintptr)(aof[aoo[i - base]]));
+            address = (void*)(peImage + (uintptr)(aof[aoo[i]]));
             break;
         }
     }
@@ -1355,7 +1325,7 @@ static void* ldr_process_export(LPSTR name)
         src++;
     }
     // use "mem_init" for prevent incorrect compiler
-    // optimize and generate incorrect shellcode
+    // optimize and generate incorrect template
     byte dllName[512];
     mem_init(dllName, sizeof(dllName));
     // prevent array bound when call mem_copy
@@ -1370,19 +1340,13 @@ static void* ldr_process_export(LPSTR name)
     dllName[dot+3] = 'l';
     dllName[dot+4] = 0x00;
     // load dll if it not loaded
-    HMODULE hModule = ldr_load_module(dllName);
-    if (hModule == NULL)
-    {
-        hModule = loader->LoadLibraryA(dllName);
-        dbg_log("[PE Loader]", "LoadLibrary: %s for forwarded function", dllName);
-    } else {
-        dbg_log("[PE Loader]", "Already LoadLibrary: %s forwarded function", dllName);
-    }
+    HMODULE hModule = loader->LoadLibraryA(dllName);
     if (hModule == NULL)
     {
         SetLastErrno(ERR_LOADER_FORWARDED_MODULE);
         return NULL;
     }
+    dbg_log("[PE Loader]", "LoadLibrary: %s for forwarded function", dllName);
     LPCSTR procName = (LPCSTR)((uintptr)exportName + dot + 1);
     return ldr_GetProcAddress(hModule, procName);
 }
@@ -1481,14 +1445,7 @@ static bool ldr_process_delay_import()
         }
         // check the target DLL is loaded
         LPSTR   dllName = (LPSTR)(peImage + dld->DllNameRVA);
-        HMODULE hModule = ldr_load_module(dllName);
-        if (hModule == NULL)
-        {
-            hModule = loader->LoadLibraryA(dllName);
-            dbg_log("[PE Loader]", "Lazy LoadLibrary: %s", dllName);
-        } else {
-            dbg_log("[PE Loader]", "Already LoadLibrary: %s", dllName);
-        }
+        HMODULE hModule = loader->LoadLibraryA(dllName);
         if (hModule == NULL)
         {
             if (!loader->Config.AllowSkipDLL)
@@ -1499,6 +1456,7 @@ static bool ldr_process_delay_import()
             dld++;
             continue;
         }
+        dbg_log("[PE Loader]", "Lazy LoadLibrary: %s", dllName);
         Image_ThunkData* nameTable = (Image_ThunkData*)(peImage + dld->ImportNameTableRVA);
         Image_ThunkData* addrTable = (Image_ThunkData*)(peImage + dld->ImportAddressTableRVA);
         Image_ImportByName* ibn;
@@ -1528,22 +1486,6 @@ static bool ldr_process_delay_import()
         dld++;
     }
     return true;
-}
-
-__declspec(noinline)
-static HMODULE ldr_load_module(LPSTR name)
-{
-    PELoader*  loader  = getPELoaderPointer();
-    Runtime_M* runtime = loader->Runtime;
-
-    LPWSTR nameW = runtime->WinBase.ANSIToUTF16(name);
-    if (nameW == NULL)
-    {
-        return NULL;
-    }
-    HMODULE hModule = GetModuleHandle(loader->IMOML, nameW);
-    runtime->Memory.Free(nameW);
-    return hModule;
 }
 
 __declspec(noinline)
@@ -1827,7 +1769,8 @@ LPWSTR hook_GetCommandLineW()
 __declspec(noinline)
 LPWSTR* hook_CommandLineToArgvW(LPCWSTR lpCmdLine, int* pNumArgs)
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "CommandLineToArgvW: \"%ls\"", lpCmdLine);
 
@@ -1841,7 +1784,7 @@ LPWSTR* hook_CommandLineToArgvW(LPCWSTR lpCmdLine, int* pNumArgs)
     uint pHash = 0xBED6046A;
     uint hKey  = 0x7A08154B;
 #endif
-    CommandLineToArgvW_t CommandLineToArgvW = loader->Config.FindAPI(mHash, pHash, hKey);
+    CommandLineToArgvW_t CommandLineToArgvW = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (CommandLineToArgvW == NULL)
     {
         return NULL;
@@ -1849,7 +1792,7 @@ LPWSTR* hook_CommandLineToArgvW(LPCWSTR lpCmdLine, int* pNumArgs)
 
     // if lpCmdLine is not L"", call the original function
     uint16 empty[] = { 0x0000 };
-    if (strcmp_w((UTF16)lpCmdLine, empty) != 0)
+    if (!strequ_w((UTF16)lpCmdLine, empty))
     {
         return CommandLineToArgvW(lpCmdLine, pNumArgs);
     }
@@ -1929,7 +1872,7 @@ HANDLE stub_CreateThread(
 
     // alloc memory for store actual StartAddress and Parameter
     uint size = sizeof(createThreadCtx);
-    size += (1 + RandUintN((uint64)lpParameter, 4)) * 4096;
+    size += (1 + runtime->Random.UintN((uint64)lpParameter, 4)) * 4096;
     LPVOID parameter = runtime->Memory.Alloc(size);
     if (parameter == NULL)
     {
@@ -1978,24 +1921,24 @@ void stub_ExecuteThread(LPVOID lpParameter)
     {
     case CC_STDCALL:
       {
-        typedef void(__stdcall *func_entry_t)(LPVOID lpParameter);
-        func_entry_t entry = (func_entry_t)startAddress;
-        entry(parameter);
+        typedef void(__stdcall *fep_t)(LPVOID lpParameter);
+        fep_t ep = (fep_t)startAddress;
+        ep(parameter);
         break;
       }
     case CC_CDECL:
       {
-        typedef void (__cdecl *func_entry_t)(LPVOID lpParameter);
-        func_entry_t entry = (func_entry_t)startAddress;
-        entry(parameter);
+        typedef void (__cdecl *fep_t)(LPVOID lpParameter);
+        fep_t ep = (fep_t)startAddress;
+        ep(parameter);
         break;
       }
     case CC_CLRCALL:
       {
         // TODO think it  __clrcall
-        typedef void(__stdcall *func_entry_t)(LPVOID lpParameter);
-        func_entry_t entry = (func_entry_t)startAddress;
-        entry(parameter);
+        typedef void(__stdcall *fep_t)(LPVOID lpParameter);
+        fep_t ep = (fep_t)startAddress;
+        ep(parameter);
         break;
       }
     default:
@@ -2059,7 +2002,7 @@ void hook_ExitProcess(UINT uExitCode)
 
     if (!runtime->Watchdog.IsEnabled() || uExitCode == 0)
     {
-        runtime->Core.Stop();
+        runtime->Core.Stop(uExitCode);
         return;
     }
     loader->ExitThread(0);
@@ -2069,7 +2012,8 @@ __declspec(noinline)
 int __cdecl hook_msvcrt_getmainargs(
     int* argc, byte*** argv, byte*** env, int doWildCard, void* startInfo
 ){
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call msvcrt.__getmainargs");
 
@@ -2083,7 +2027,7 @@ int __cdecl hook_msvcrt_getmainargs(
     uint pHash = 0xC4AC5444;
     uint hKey  = 0xADAA4C44;
 #endif
-    msvcrt_getmainargs_t getmainargs = loader->Config.FindAPI(mHash, pHash, hKey);
+    msvcrt_getmainargs_t getmainargs = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (getmainargs == NULL)
     {
         return -1;
@@ -2111,7 +2055,8 @@ __declspec(noinline)
 int __cdecl hook_msvcrt_wgetmainargs(
     int* argc, uint16*** argv, uint16*** env, int doWildCard, void* startInfo
 ){
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call msvcrt.__wgetmainargs");
 
@@ -2125,7 +2070,7 @@ int __cdecl hook_msvcrt_wgetmainargs(
     uint pHash = 0x6AC316B4;
     uint hKey  = 0xBAAA7F84;
 #endif
-    msvcrt_wgetmainargs_t wgetmainargs = loader->Config.FindAPI(mHash, pHash, hKey);
+    msvcrt_wgetmainargs_t wgetmainargs = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (wgetmainargs == NULL)
     {
         return -1;
@@ -2224,7 +2169,8 @@ void __cdecl hook_msvcrt_endthreadex(uint32 code)
 __declspec(noinline)
 int* __cdecl hook_ucrtbase_p_argc()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___argc");
 
@@ -2244,7 +2190,7 @@ int* __cdecl hook_ucrtbase_p_argc()
     uint pHash = 0x80842212;
     uint hKey  = 0xAF4827C9;
 #endif
-    ucrtbase_p_argc_t p_argc = loader->Config.FindAPI(mHash, pHash, hKey);
+    ucrtbase_p_argc_t p_argc = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (p_argc == NULL)
     {
         return NULL;
@@ -2255,7 +2201,8 @@ int* __cdecl hook_ucrtbase_p_argc()
 __declspec(noinline)
 byte*** __cdecl hook_ucrtbase_p_argv()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___argv");
 
@@ -2275,7 +2222,7 @@ byte*** __cdecl hook_ucrtbase_p_argv()
     uint pHash = 0x64472B0D;
     uint hKey  = 0x9D9FB3CF;
 #endif
-    ucrtbase_p_argv_t p_argv = loader->Config.FindAPI(mHash, pHash, hKey);
+    ucrtbase_p_argv_t p_argv = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (p_argv == NULL)
     {
         return NULL;
@@ -2286,7 +2233,8 @@ byte*** __cdecl hook_ucrtbase_p_argv()
 __declspec(noinline)
 uint16*** __cdecl hook_ucrtbase_p_wargv()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     dbg_log("[PE Loader]", "call ucrtbase.__p___wargv");
 
@@ -2306,7 +2254,7 @@ uint16*** __cdecl hook_ucrtbase_p_wargv()
     uint pHash = 0xD61A0370;
     uint hKey  = 0x8F33ADE7;
 #endif
-    ucrtbase_p_wargv_t p_wargv = loader->Config.FindAPI(mHash, pHash, hKey);
+    ucrtbase_p_wargv_t p_wargv = runtime->HashAPI.FindAPI_MH(mHash, pHash, hKey);
     if (p_wargv == NULL)
     {
         return NULL;
@@ -2493,7 +2441,7 @@ static void pe_entry_point()
     uint exitCode = ((uint(*)())(loader->EntryPoint))();
 
     // exit process
-    hook_ExitProcess(exitCode);
+    hook_ExitProcess((UINT)exitCode);
 }
 
 __declspec(noinline)
@@ -2621,7 +2569,7 @@ static uint restart_image()
 }
 
 __declspec(noinline)
-void* LDR_GetProc(LPSTR name)
+void* LDR_GetProc(byte* name)
 {
     if (!ldr_lock())
     {
@@ -2793,7 +2741,7 @@ errno LDR_Execute()
 }
 
 __declspec(noinline)
-errno LDR_Exit(uint exitCode)
+errno LDR_Exit(uint32 exitCode)
 {
     if (!ldr_lock())
     {
@@ -2828,43 +2776,31 @@ errno LDR_Destroy()
         ldr_exit_process((uint)(-1));
     }
 
-    errno err = NO_ERROR;
-    if (loader->Config.NotEraseInstruction)
-    {
-        DWORD oldProtect;
-        if (!adjustPageProtect(loader, &oldProtect) && err == NO_ERROR)
-        {
-            err = ERR_LOADER_ADJUST_PROTECT;
-        }
-        if (!recoverPELoaderPointer(loader) && err == NO_ERROR)
-        {
-            err = ERR_LOADER_RECOVER_INST;
-        }
-        if (!recoverPageProtect(loader, oldProtect) && err == NO_ERROR)
-        {
-            err = ERR_LOADER_RECOVER_PROTECT;
-        }
-    }
-
+    errno error = NO_ERROR;
     errno errcl = cleanPELoader(loader);
-    if (errcl != NO_ERROR && err == NO_ERROR)
+    if (errcl != NO_ERROR && error == NO_ERROR)
     {
-        err = errcl;
+        error = errcl;
     }
-
     errno errex = runtime->Core.Exit();
-    if (errex != NO_ERROR && err == NO_ERROR)
+    if (errex != NO_ERROR && error == NO_ERROR)
     {
-        err = errex;
+        error = errex;
     }
-    return err;
+    return error;
 }
 
 // prevent it be linked to other functions.
 #pragma optimize("", off)
 
+// make sure these function is large than 12 bytes
 #pragma warning(push)
 #pragma warning(disable: 4189)
+static void ldr_pointer_stub()
+{
+    uint64 var = 0xFFFFFFFFFFFFFFFF;
+}
+
 static void ldr_epilogue()
 {
     byte var = 10;
