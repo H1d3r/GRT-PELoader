@@ -54,10 +54,11 @@ typedef struct {
     GetStdHandle_t        GetStdHandle;
 
     // loader context
-    void* MainMemPage; // store all structures
-    void* PEBackup;    // PE image backup
-    bool  IsRunning;   // execution flag
-    uint  ExitCode;    // exit code from exit
+    void* MainMemPage;  // store all structures
+    void* PEBackup;     // PE image backup
+    uint  PEBackupSize; // PE image backup size
+    bool  IsRunning;    // execution flag
+    uint  ExitCode;     // exit code from exit
 
     // loader resource
     HANDLE hMutex;   // global mutex
@@ -145,7 +146,7 @@ static void* ldr_GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 static void* ldr_get_hooks(LPCWSTR module, LPCSTR lpProcName);
 
 static errno ldr_init_mutex();
-static bool  ldr_copy_image();
+static bool  ldr_copy_mapped_image();
 static void* ldr_process_export(LPSTR name);
 static bool  ldr_process_import();
 static bool  ldr_process_delay_import();
@@ -244,8 +245,8 @@ PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* config)
     }
     // set structure address
     uintptr address = (uintptr)memPage;
-    uintptr loaderAddr = address + 1000 + runtime->Random.UintN(address, 128);
-    uintptr moduleAddr = address + 3000 + runtime->Random.UintN(address, 128);
+    uintptr loaderAddr = address + 1000 + runtime->Random.UintN(0, 128);
+    uintptr moduleAddr = address + 3000 + runtime->Random.UintN(0, 128);
     // allocate loader memory
     PELoader* loader = (PELoader*)loaderAddr;
     mem_init(loader, sizeof(PELoader));
@@ -602,11 +603,11 @@ static bool mapSections(PELoader* loader)
         base = (LPVOID)(loader->OptHeader.ImageBase);
     }
     // append random memory size to image tail
-    uint64 seed = (uint64)(GetFuncAddr(&InitPELoader));
     uint32 size = loader->ImageSize;
-    size += (uint32)((1 + loader->Runtime->Random.UintN(seed, 128)) * 4096);
+    size += (uint32)((1 + loader->Runtime->Random.UintN(0, 128)) * 4096);
     // allocate memory for map PE image
-    void* mem = loader->VirtualAlloc(base, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    DWORD type = MEM_COMMIT|MEM_RESERVE;
+    void* mem = loader->VirtualAlloc(base, size, type, PAGE_EXECUTE_READWRITE);
     if (mem == NULL)
     {
         return false;
@@ -718,8 +719,9 @@ static bool initTLSDirectory(PELoader* loader)
     uint size  = tls->EndAddressOfRawData - tls->StartAddressOfRawData;
     uint total = 16 + size + tls->SizeOfZeroFill;
     // allocate memory for save tls template data
-    uint  pSize = total + (uint)((1 + runtime->Random.UintN((uint64)tls, 8)) * 4096);
-    void* block = loader->VirtualAlloc(NULL, pSize, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+    uint  pSize = total + (uint)((1 + runtime->Random.UintN(0, 8)) * 4096);
+    DWORD type  = MEM_COMMIT|MEM_RESERVE;
+    void* block = loader->VirtualAlloc(NULL, pSize, type, PAGE_READWRITE);
     if (block == NULL)
     {
         return false;
@@ -818,20 +820,33 @@ static bool backupPEImage(PELoader* loader)
 {
     Runtime_M* runtime = loader->Runtime;
 
+    // calculate the compressed image size
+    void*  image = (void*)(loader->PEImage);
+    uint32 size  = loader->ImageSize;
+    uint bakSize = runtime->Compressor.Compress(NULL, image, size, 4096);
+    if (bakSize == (uint)(-1))
+    {
+        return false;
+    }
+    loader->PEBackupSize = bakSize;
+
     // append random memory size to tail
-    uint64 seed = (uint64)(GetFuncAddr(&InitPELoader)) + 4096;
-    uint32 size = loader->ImageSize;
-    size += (uint32)((1 + runtime->Random.UintN(seed, 128)) * 4096);
+    SIZE_T memSize = bakSize + (1 + runtime->Random.UintN(0, 128)) * 4096;
     // allocate memory for backup PE image
-    void* mem = loader->VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+    DWORD type = MEM_COMMIT|MEM_RESERVE;
+    void* mem = loader->VirtualAlloc(NULL, memSize, type, PAGE_READWRITE);
     if (mem == NULL)
     {
         return false;
     }
-    runtime->Random.Buffer(mem, (int64)size);
     loader->PEBackup = mem;
-    // copy mapped PE image
-    mem_copy(mem, (void*)(loader->PEImage), loader->ImageSize);
+
+    // save compressed PE image(mapped)
+    if (runtime->Compressor.Compress(mem, image, size, 4096) == (uint)(-1))
+    {
+        return false;
+    }
+
 #ifndef NO_RUNTIME
     // lock memory region with special argument for reuse PE image
     if (!loader->Runtime->Memory.Lock(mem))
@@ -863,7 +878,7 @@ static void erasePELoaderMethods(PELoader* loader)
     uintptr begin = (uintptr)(GetFuncAddr(&allocMainMemPage));
     uintptr end   = (uintptr)(GetFuncAddr(&erasePELoaderMethods));
     uintptr size  = end - begin;
-    loader->Runtime->Random.Buffer((byte*)begin, (int64)size);
+    loader->Runtime->Crypto.EraseInstruction((void*)begin, size);
 }
 
 // ======================== these instructions will not be erased ========================
@@ -915,7 +930,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for PE image
         if (peImage != NULL)
         {
-            runtime->Random.Buffer(peImage, loader->ImageSize);
+            runtime->Crypto.EraseBuffer(peImage, loader->ImageSize);
             if (!virtualFree(peImage, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_PE_IMAGE;
@@ -924,7 +939,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for PE image backup
         if (peBackup != NULL)
         {
-            runtime->Random.Buffer(peBackup, loader->ImageSize);
+            runtime->Crypto.EraseBuffer(peBackup, loader->ImageSize);
             if (!virtualFree(peBackup, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_PE_IMAGE_BACKUP;
@@ -933,7 +948,7 @@ static errno cleanPELoader(PELoader* loader)
         // release memory page for TLS block template
         if (tlsBlock != NULL)
         {
-            runtime->Random.Buffer(tlsBlock, loader->TLSLen);
+            runtime->Crypto.EraseBuffer(tlsBlock, loader->TLSLen);
             if (!virtualFree(tlsBlock, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_TLS_BLOCK;
@@ -942,7 +957,7 @@ static errno cleanPELoader(PELoader* loader)
         // release main memory page
         if (memPage != NULL)
         {
-            runtime->Random.Buffer(memPage, MAIN_MEM_PAGE_SIZE);
+            runtime->Crypto.EraseBuffer(memPage, MAIN_MEM_PAGE_SIZE);
             if (!virtualFree(memPage, 0, MEM_RELEASE) && errno == NO_ERROR)
             {
                 errno = ERR_LOADER_FREE_MAIN_MEM;
@@ -1232,17 +1247,21 @@ static errno ldr_init_mutex()
     return NO_ERROR;
 }
 
-static bool ldr_copy_image()
+static bool ldr_copy_mapped_image()
 {
-    PELoader* loader = getPELoaderPointer();
+    PELoader*  loader  = getPELoaderPointer();
+    Runtime_M* runtime = loader->Runtime;
 
     if (!ldr_lock_status())
     {
         return false;
     }
 
-    // recovery PE image from backup for process data like global variable
-    mem_copy((void*)loader->PEImage, loader->PEBackup, loader->ImageSize);
+    // recovery mapped PE image from compressed backup
+    // for process section data like ".data"
+    void* dst = (void*)(loader->PEImage);
+    void* src = loader->PEBackup;
+    runtime->Compressor.Decompress(dst, src, loader->PEBackupSize);
 
     return ldr_unlock_status();
 }
@@ -1505,9 +1524,9 @@ static errno ldr_start_process()
         {
             break;
         }
-        if (!ldr_copy_image())
+        if (!ldr_copy_mapped_image())
         {
-            errno = ERR_LOADER_COPY_PE_IMAGE;
+            errno = ERR_LOADER_COPY_MAPPED_PE_IMAGE;
             break;
         }
         // load library and fix function address
@@ -1872,7 +1891,7 @@ HANDLE stub_CreateThread(
 
     // alloc memory for store actual StartAddress and Parameter
     uint size = sizeof(createThreadCtx);
-    size += (1 + runtime->Random.UintN((uint64)lpParameter, 4)) * 4096;
+    size += (1 + runtime->Random.UintN(0, 4)) * 4096;
     LPVOID parameter = runtime->Memory.Alloc(size);
     if (parameter == NULL)
     {
