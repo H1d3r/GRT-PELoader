@@ -30,6 +30,10 @@
 #define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   13
 #define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14
 
+#define IMAGE_SCN_MEM_EXECUTE 0x20000000
+#define IMAGE_SCN_MEM_READ    0x40000000
+#define IMAGE_SCN_MEM_WRITE   0x80000000
+
 #define IMAGE_REL_BASED_ABSOLUTE 0
 #define IMAGE_REL_BASED_HIGHLOW  3 
 #define IMAGE_REL_BASED_DIR64    10
@@ -237,13 +241,28 @@ typedef struct {
 } Image_Reloc;
 
 typedef struct {
-    UINT   StartAddressOfRawData;
-    UINT   EndAddressOfRawData;
-    UINT*  AddressOfIndex;
-    LPVOID AddressOfCallBacks;
-    DWORD  SizeOfZeroFill;
-    DWORD  Characteristics;
-} Image_TLSDirectory;
+    DWORD StartAddressOfRawData;
+    DWORD EndAddressOfRawData;
+    DWORD AddressOfIndex;
+    DWORD AddressOfCallBacks;
+    DWORD SizeOfZeroFill;
+    DWORD Characteristics;
+} Image_TLSDirectory32;
+
+typedef struct {
+    QWORD StartAddressOfRawData;
+    QWORD EndAddressOfRawData;
+    QWORD AddressOfIndex;
+    QWORD AddressOfCallBacks;
+    DWORD SizeOfZeroFill;
+    DWORD Characteristics;
+} Image_TLSDirectory64;
+
+#ifdef _WIN64
+    typedef Image_TLSDirectory64 Image_TLSDirectory;
+#elif _WIN32
+    typedef Image_TLSDirectory32 Image_TLSDirectory;
+#endif
 
 typedef BOOL (*DllMain_t)
 (
@@ -254,5 +273,18 @@ typedef void (*TLSCallback_t)
 (
     HMODULE hModule, DWORD dwReason, LPVOID lpReserved
 );
+
+typedef struct {
+    uintptr EntryPoint;
+    uintptr ImageBase;
+    uint32  ImageSize;
+
+    Image_FileHeader     FileHeader;
+    Image_OptionalHeader OptionalHeader;
+
+    Image_SectionHeader Text;
+} PE_Image;
+
+void ParsePEImage(void* address, PE_Image* image);
 
 #endif // PE_IMAGE_H
