@@ -4,7 +4,6 @@
 #include "win_types.h"
 #include "lib_memory.h"
 #include "hash_api.h"
-#include "random.h"
 #include "errno.h"
 #include "runtime.h"
 #include "pe_loader.h"
@@ -13,7 +12,7 @@
 
 __declspec(thread) int tls_var = 0x1234;
 
-static void* copyShellcode();
+static void* loadInstance();
 
 bool TestInitPELoader()
 {
@@ -26,14 +25,19 @@ bool TestInitPELoader()
     }
 
     Runtime_Opts opts = {
-        .BootInstAddress     = NULL,
-        .DisableWatchdog     = false,
+        .ImagePinningHash    = 0xF5ED355C6724563E, // "test.exe"
+        .ShieldModuleHash    = 0,
+        .ShieldEntryPoint    = 0,
+        .ShieldMemAddress    = 0,
+        .EnableSecurityMode  = false,
+        .DisableDetector     = false,
         .DisableSysmon       = false,
+        .DisableWatchdog     = false,
         .NotEraseInstruction = false,
         .NotAdjustProtect    = false,
         .TrackCurrentThread  = false,
     };
-    runtime = InitRuntime(&opts);
+    runtime = InitRuntime(NULL, &opts);
     if (runtime == NULL)
     {
         printf_s("failed to initialize runtime: 0x%X\n", GetLastErrno());
@@ -42,18 +46,18 @@ bool TestInitPELoader()
     }
 
     // set HashAPI source
-    FindAPI_t findAPI;
+    FindAPI_MA_t findAPI;
 #ifdef NO_RUNTIME
     findAPI = &FindAPI;
 #else
-    findAPI = runtime->HashAPI.FindAPI;
+    findAPI = runtime->HashAPI.FindAPI_MA;
 #endif // NO_RUNTIME
 
     // read PE image file
     LPSTR file;
 #ifdef _WIN64
-    // file = "image\\x64\\go.exe";
-    file = "image\\x64\\rust_msvc.exe";
+    file = "image\\x64\\go.exe";
+    // file = "image\\x64\\rust_msvc.exe";
     // file = "image\\x64\\rust_gnu.exe";
     // file = "image\\x64\\ucrtbase_main.exe";
     // file = "image\\x64\\ucrtbase_wmain.exe";
@@ -101,17 +105,14 @@ bool TestInitPELoader()
         .StdOutput      = NULL,
         .StdError       = NULL,
         .NotStopRuntime = false,
-
-        .NotEraseInstruction = true,
-        .NotAdjustProtect    = false,
     };
-#ifdef SHELLCODE_MODE
+#ifdef PIC_MODE
     typedef PELoader_M* (*InitPELoader_t)(Runtime_M* runtime, PELoader_Cfg* cfg);
-    InitPELoader_t initPELoader = copyShellcode();
+    InitPELoader_t initPELoader = loadInstance();
     pe_loader = initPELoader(runtime, &cfg);
 #else
     pe_loader = InitPELoader(runtime, &cfg);
-#endif // SHELLCODE_MODE
+#endif // PIC_MODE
     if (pe_loader == NULL)
     {
         printf_s("failed to initialize PE loader: 0x%X\n", GetLastErrno());
@@ -119,11 +120,11 @@ bool TestInitPELoader()
         return false;
     }
     // erase PE image after initialize
-    RandBuffer(image.buf, image.len);
+    runtime->Random.Buffer(image.buf, image.len);
     return true;
 }
 
-static void* copyShellcode()
+static void* loadInstance()
 {
     VirtualAlloc_t VirtualAlloc = FindAPI_A("kernel32.dll", "VirtualAlloc");
 
@@ -137,7 +138,7 @@ static void* copyShellcode()
         return NULL;
     }
     mem_copy(mem, (void*)begin, size);
-    printf_s("shellcode: 0x%zX\n", (uintptr)mem);
+    printf_s("instance: 0x%zX\n", (uintptr)mem);
     return mem;
 }
 
