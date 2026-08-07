@@ -3,35 +3,14 @@
 
 #include "c_types.h"
 #include "win_types.h"
+#include "win_structs.h"
 #include "dll_kernel32.h"
 #include "lib_string.h"
 #include "hash_api.h"
 #include "errno.h"
 
-// about runtime options at the shellcode tail.
-//
-// +------------+---------+---------+-----------+
-// | magic mark | option1 | option2 | option... |
-// +------------+---------+---------+-----------+
-// |    0xFC    |   var   |   var   |    var    |
-// +------------+---------+---------+-----------+
-
-#define OPTION_STUB_SIZE  64
-#define OPTION_STUB_MAGIC 0xFC
-
-#define OPT_OFFSET_ENABLE_SECURITY_MODE  1
-#define OPT_OFFSET_DISABLE_DETECTOR      2
-#define OPT_OFFSET_DISABLE_WATCHDOG      3
-#define OPT_OFFSET_DISABLE_SYSMON        4
-#define OPT_OFFSET_NOT_ERASE_INSTRUCTION 5
-#define OPT_OFFSET_NOT_ADJUST_PROTECT    6
-#define OPT_OFFSET_TRACK_CURRENT_THREAD  7
-
-// for generic shellcode development.
-
-#ifndef DLL_ADVAPI32_H
-typedef DWORD ALG_ID;
-#endif // DLL_ADVAPI32_H
+// 0x010A02 means v1.10.2
+#define RUNTIME_VERSION 0x000901
 
 // about library tracker
 #ifndef MOD_LIBRARY_H
@@ -189,7 +168,7 @@ typedef errno (*HTTPFreeDLL_t)();
 // ================================WinCrypto================================
 
 // The allocated databuf must call Runtime_M.Memory.Free().
-// 
+//
 // +---------+-------------+
 // |   IV    | cipher data |
 // +---------+-------------+
@@ -201,7 +180,7 @@ typedef errno (*HTTPFreeDLL_t)();
 //
 // The HMAC/AES Key only contain the key data, not contain header.
 // The RSA Private/Public Key contain the header RSAPUBKEYHEADER.
-// 
+//
 // The valid AES key length are 16, 24, 32 bytes.
 
 #ifndef WIN_CRYPTO_H
@@ -213,6 +192,10 @@ typedef errno (*HTTPFreeDLL_t)();
 #define CRYPTO_RSA_KEY_USAGE_KEYX 2
 
 #endif // WIN_CRYPTO_H
+
+#ifndef DLL_ADVAPI32_H
+typedef DWORD ALG_ID;
+#endif // DLL_ADVAPI32_H
 
 typedef errno (*CryptoRandBuffer_t)(databuf* data);
 typedef errno (*CryptoHash_t)(ALG_ID aid, databuf* data, databuf* hash);
@@ -230,6 +213,13 @@ typedef errno (*CryptoFreeDLL_t)();
 // =================================Runtime=================================
 
 // about random module
+// 
+// RandIntX maybe return negative value.
+// RandXxxN is used to generate random value in [0, n).
+// 
+// RandSequence is used to generate random sequence with range.
+// example: RandSequence(array, 4) will set array like [0, 3, 1, 2]
+
 typedef uint64 (*RandSeed_t)();
 typedef int    (*RandInt_t)(uint64 seed);
 typedef int8   (*RandInt8_t)(uint64 seed);
@@ -257,23 +247,83 @@ typedef BOOL   (*RandBOOL_t)(uint64 seed);
 typedef void   (*RandBuffer_t)(void* buf, int64 size);
 typedef void   (*RandSequence_t)(int* array, int n);
 
+// about encoding module
+// 
+// if dst is NULL, it only calculate the output length.
+// it will return -1 when call Decode with invalid data.
+typedef uint (*HexEncode_t)(void* src, uint len, byte* dst);
+typedef uint (*HexDecode_t)(byte* src, uint len, void* dst);
+typedef uint (*Base64Encode_t)(void* src, uint len, byte* dst);
+typedef uint (*Base64Decode_t)(byte* src, uint len, void* dst);
+
+// about hash module
+typedef struct SHA256 SHA256;
+
+typedef void (*SHA256_Write_t)(SHA256* obj, void* data, uint len);
+typedef void (*SHA256_Sum_t)(SHA256* obj, byte (*hash)[32]);
+typedef void (*SHA256_Reset_t)(SHA256* obj);
+typedef void (*SHA256_Free_t)(SHA256* obj);
+
+struct SHA256 {
+    // internal data
+    uint32 reserved0[8];
+    uint64 reserved1;
+    uint8  reserved2[64];
+    uint8  reserved3;
+
+    // method table
+    SHA256_Write_t Write;
+    SHA256_Sum_t   Sum;
+    SHA256_Reset_t Reset;
+    SHA256_Free_t  Free;
+};
+
+typedef SHA256* (*SHA256New_t)();
+typedef void    (*SHA256Hash_t)(void* data, uint len, byte (*hash)[32]);
+
 // about crypto module
-typedef void (*Encrypt_t)(void* buf, uint size, byte* key, byte* iv);
-typedef void (*Decrypt_t)(void* buf, uint size, byte* key, byte* iv);
+typedef void (*XORBuffer_t)(void* buf, uint bufSize, void* key, uint keySize);
+typedef void (*SubstituteBuffer_t)(void* buf, uint size);
+typedef void (*ShuffleBuffer_t)(void* buf, uint size);
+typedef void (*EraseBuffer_t)(void* buf, uint size);
+typedef void (*EraseInstruction_t)(void* buf, uint size);
 
 // about compress module
-// 
-// Compress is used to compress data with LZSS.
-// If return value is -1, window size is invalid.
+//
+// Compress is used to compress data using LZSS with configurable parameters.
+//
+// Parameters:
+//   window: sliding window size (128-4096, 0 for default 1024)
+//   chain:  hash chain length for match search
+//     1  = single hash candidate (fastest, worst compression)
+//     N  = N-candidate hash chain (trade-off between speed and compression)
+//     0  = 6-candidate hash chain
+//     16 = brute-force (best compression, slowest)
+//
+// If return value is -1, window size or chain length is invalid.
 // If dst is NULL, calculate the compressed length.
 // 
 // Decompress is used to decompress data with LZSS.
+// If return value is -1, the compressed data is invalid.
 // If dst is NULL, calculate the raw data length.
-// 
-// Since the algorithm is relatively simple to implement, 
-// it is NOT recommended to compress data exceeding 8MB.
 
-typedef uint (*Compress_t)(void* dst, void* src, uint len, uint window);
+#ifndef COMPRESS_H
+
+// about search window size.
+#define MINIMUM_WINDOW_SIZE 128
+#define MAXIMUM_WINDOW_SIZE 4096
+#define DEFAULT_WINDOW_SIZE 1024
+
+// when chain length is MAXIMUM_CHAIN_LEN, it will use brute-force search
+// for the best compression, but it is slowest, otherwise, it will use
+// N-candidate hash chain for trade-off between speed and compression.
+#define MINIMUM_CHAIN_LEN 1
+#define MAXIMUM_CHAIN_LEN 16
+#define DEFAULT_CHAIN_LEN 6
+
+#endif // COMPRESS_H
+
+typedef uint (*Compress_t)(void* dst, void* src, uint len, uint window, uint chain);
 typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 
 // about serialization module
@@ -286,9 +336,9 @@ typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 // +---------+----------+----------+----------+------------+
 //
 // item data structure
-// 0······· value or pointer
-// ·0000000 data length
-// 
+// 0x0······· value or pointer
+// 0x·0000000 data length
+//
 // Serialize is used to serialize structure to a buffer.
 // If success, return the serialized data length. If failed, return 0.
 // If serialized is NULL, it will calculate the serialized data length.
@@ -299,14 +349,9 @@ typedef uint (*Decompress_t)(void* dst, void* src, uint len);
 
 #ifndef SERIALIZE_H
 
-#define SERIALIZE_HEADER_MAGIC 0xFFFFFFFF
+#define SERIALIZE_TYPE_VALUE   0x00000000
+#define SERIALIZE_TYPE_POINTER 0x80000000
 #define SERIALIZE_ITEM_END     0x00000000
-
-#define SERIALIZE_FLAG_VALUE   0x00000000
-#define SERIALIZE_FLAG_POINTER 0x80000000
-
-#define SERIALIZE_MASK_FLAG    0x80000000
-#define SERIALIZE_MASK_LENGTH  0x7FFFFFFF
 
 #endif // SERIALIZE_H
 
@@ -314,18 +359,18 @@ typedef uint32 (*Serialize_t)(uint32* descriptor, void* data, void* serialized);
 typedef BOOL   (*Unserialize_t)(void* serialized, void* data);
 
 // about memory scanner module
-// 
+//
 // MemScan is used to scans data in the memory of the current process.
 // The return value is the number of results scanned, if failed to
 // scan, it will return -1, use the GetLastErrno for get error code.
-// 
+//
 // BinToPattern is used to convert binary data to pattern for MemScan.
 // The pattern buffer size must greater the [data size * 3 + 1].
-// 
+//
 // [WARNING]
 // You need to manually exclude certain scan results, such as the "value"
 // stored in the stack as a argument for MemScanByValue.
-// 
+//
 // example:
 //   MemScan_Cfg config = {
 //      .Pattern = "F1 ?2 ?? A?",
@@ -347,18 +392,6 @@ typedef uint (*MemScanByValue_t)(void* value, uint size, uintptr* results, uint 
 typedef uint (*MemScanByConfig_t)(MemScan_Cfg* config, uintptr* results, uint maxItem);
 typedef void (*BinToPattern_t)(void* data, uint size, byte* pattern);
 
-// GetProcByName and GetProcByHash are use HashAPI module for
-// implement original GetProcAddress.
-// 
-// GetProcAddress is not recommend, because GetProcAddressByName
-// will try to use HashAPI first, then use original GetProcAddress,
-// recommend use GetProcByName with redirect FALSE instead it.
-// 
-// These methods are used for API Redirector or common shellcode.
-typedef void* (*GetProcByName_t)(HMODULE hModule, LPCSTR lpProcName, BOOL redirect);
-typedef void* (*GetProcByHash_t)(uint mHash, uint pHash, uint hKey, BOOL redirect);
-typedef void* (*GetProcByHashML_t)(void* list, uint mHash, uint pHash, uint hKey, BOOL redirect);
-
 // about detector
 #ifndef DETECTOR_H
 typedef struct {
@@ -366,8 +399,8 @@ typedef struct {
     BOOL  HasDebugger;
     BOOL  HasMemoryScanner;
     BOOL  InSandbox;
-    BOOL  InVirtualMachine;
     BOOL  InEmulator;
+    BOOL  InVirtualMachine;
     BOOL  IsAccelerated;
     int32 SafeRank;
 } DT_Status;
@@ -414,13 +447,37 @@ typedef BOOL  (*SMGetStatus_t)(SM_Status* status);
 typedef errno (*SMPause_t)();
 typedef errno (*SMContinue_t)();
 
+// =============================== shield ===============================
+#ifndef SHIELD_H
+#define SHIELD_SRC_PRE_INJECTED 1
+#define SHIELD_SRC_SHIELD_STUB  2
+#define SHIELD_SRC_EXTERNAL     3
+
+#define SHIELD_MAIN_MODULE 0x0001
+
+#define SHIELD_SEC_MIN_DECOY_SIZE 1024
+
+typedef struct {
+    void* EntryPoint;
+    void* BaseAddress;
+    int64 Source;
+} SD_Status;
+#endif // SHIELD_H
+
+typedef BOOL  (*SDGetStatus_t)(SD_Status* status);
+typedef errno (*SDSleep_t)(uint32 milliseconds);
+typedef void  (*SDStop_t)(uint32 code);
+
 // about process environment
 //
 // These methods are used to ensure that __readgsqword or __readfsdword
-// is used only once, of course except GetTEB.
-typedef void* (*GetPEB_t)();   // get stored PEB address
-typedef void* (*GetTEB_t)();   // only a shortcut
-typedef void* (*GetIMOML_t)(); // get stored InMemoryOrderModuleList address
+// are used execute once, of course except GetTEB.
+typedef TEB* (*GetTEB_t)(); // only a shortcut of read gs or fs
+typedef PEB* (*GetPEB_t)(); // get stored PEB address
+typedef PML* (*GetPML_t)(); // get stored process module list
+
+// get immutable module handle like "kernel32.dll".
+typedef HMODULE (*GetDLL_t)(); 
 
 // about runtime core methods
 //
@@ -430,13 +487,24 @@ typedef void* (*GetIMOML_t)(); // get stored InMemoryOrderModuleList address
 //
 // SleepHR is used to call Hide, Sleep and Recover.
 // Cleanup is used to clean all tracked object except locked.
-// 
+//
 // Exit is used to clean all tracked object and clean runtime self,
-// it can only erase the instruction about the runtime self, 
+// it can only erase the instruction about the runtime self,
 // caller need erase the other memory data about instance.
-// 
+//
 // Stop is same as Exit, but it will exit current thread after exit,
-// it can erase the instruction from BootInstAddress to runtime epilogue.
+// it can erase the instruction from boot address to runtime epilogue.
+
+// for improve code layout
+typedef struct Runtime_Opts Runtime_Opts;
+
+typedef struct {
+    uint64 Version;
+    byte   Hash[32];
+    uint32 Size;
+    uint32 Flags;
+} Runtime_Info;
+
 typedef struct {
     LT_Status Library;
     MT_Status Memory;
@@ -445,23 +513,32 @@ typedef struct {
     DT_Status Detector;
     WD_Status Watchdog;
     SM_Status Sysmon;
+    SD_Status Shield;
 } Runtime_Metrics;
 
 typedef errno (*RTSleepHR_t)(uint32 milliseconds);
 typedef errno (*RTHide_t)();
 typedef errno (*RTRecover_t)();
+typedef errno (*RTOptions_t)(Runtime_Opts* opts);
+typedef errno (*RTInfo_t)(Runtime_Info* info);
 typedef errno (*RTMetrics_t)(Runtime_Metrics* metrics);
 typedef errno (*RTCleanup_t)();
 typedef errno (*RTExit_t)();
-typedef void  (*RTStop_t)();
+typedef void  (*RTStop_t)(uint32 code);
 
 // Runtime_M contains exported runtime methods.
 typedef struct {
     struct {
-        FindAPI_t    FindAPI;
-        FindAPI_ML_t FindAPI_ML;   
-        FindAPI_A_t  FindAPI_A;
-        FindAPI_W_t  FindAPI_W;
+        FindMod_MH_t  FindMod_MH;
+        FindAPI_MA_t  FindAPI_MA;
+        FindAPI_MH_t  FindAPI_MH;
+        FindMod_MHL_t FindMod_MHL;
+        FindAPI_MAL_t FindAPI_MAL;
+        FindAPI_MHL_t FindAPI_MHL;
+        FindMod_A_t   FindMod_A;
+        FindMod_W_t   FindMod_W;
+        FindAPI_A_t   FindAPI_A;
+        FindAPI_W_t   FindAPI_W;
     } HashAPI;
 
     struct {
@@ -547,7 +624,7 @@ typedef struct {
         WriteFileA_t WriteFileA;
         WriteFileW_t WriteFileW;
     } WinFile;
-    
+
     struct {
         HTTPInit_t Init;
         HTTPGet_t  Get;
@@ -603,8 +680,30 @@ typedef struct {
     } Random;
 
     struct {
-        Encrypt_t Encrypt;
-        Decrypt_t Decrypt;
+        struct {
+            HexEncode_t Encode;
+            HexDecode_t Decode;
+        } Hex;
+
+        struct {
+            Base64Encode_t Encode;
+            Base64Decode_t Decode;
+        } Base64;
+    } Encoding;
+
+    struct {
+        struct {
+            SHA256New_t  New;
+            SHA256Hash_t Hash;
+        } SHA256;
+    } Hash;
+
+    struct {
+        XORBuffer_t        XORBuffer;
+        SubstituteBuffer_t SubstituteBuffer;
+        ShuffleBuffer_t    ShuffleBuffer;
+        EraseBuffer_t      EraseBuffer;
+        EraseInstruction_t EraseInstruction;
     } Crypto;
 
     struct {
@@ -622,12 +721,6 @@ typedef struct {
         MemScanByConfig_t  ScanByConfig;
         BinToPattern_t     BinToPattern;
     } MemScanner;
-
-    struct {
-        GetProcByName_t   GetProcByName;
-        GetProcByHash_t   GetProcByHash;
-        GetProcByHashML_t GetProcByHashML;
-    } Procedure;
 
     struct {
         DetDetect_t    Detect;
@@ -657,10 +750,24 @@ typedef struct {
     } Sysmon;
 
     struct {
-        GetPEB_t   GetPEB;
-        GetTEB_t   GetTEB;
-        GetIMOML_t GetIMOML;
+        SDGetStatus_t Status;
+
+        // only for test, NOT use it.
+        SDSleep_t _Sleep;
+        SDStop_t  _Stop;
+    } Shield;
+
+    struct {
+        GetTEB_t GetTEB;
+        GetPEB_t GetPEB;
+        GetPML_t GetPML;
     } Env;
+
+    struct {
+        GetDLL_t GetMainEXE;
+        GetDLL_t GetKernel32;
+        GetDLL_t GetNtdll;
+    } DLL;
 
     struct {
         GetProcAddress_t GetProcAddress;
@@ -671,6 +778,8 @@ typedef struct {
         RTSleepHR_t Sleep;
         RTHide_t    Hide;
         RTRecover_t Recover;
+        RTOptions_t Options;
+        RTInfo_t    Info;
         RTMetrics_t Metrics;
         RTCleanup_t Cleanup;
         RTExit_t    Exit;
@@ -682,44 +791,54 @@ typedef struct {
     } Data;
 } Runtime_M;
 
-typedef struct {
-    // protect instructions like boot before Runtime,
-    // if it is NULL, Runtime will only protect self.
-    void* BootInstAddress;
+struct Runtime_Opts {
+    // runtime will not initialize when the exe name is not expected.
+    // if zero, runtime will skip this detection.
+    uint64 ImagePinningHash;
 
-    // detect environment when initialize runtime, if not safe, 
+    // the module hash of the pre-injected shield in,
+    // if 0x0000, runtime will deploy a shield from the built-in shield stub.
+    // if 0x0001, the module is the main exe.
+    // if others, the module is the target dll.
+    uint64 ShieldModuleHash;
+
+    // the RVA of the pre-injected shield in the module.
+    // if ShieldModuleHash is not zero, it must be set.
+    uint64 ShieldEntryPoint;
+
+    // the shield memory address that external program provide.
+    uint64 ShieldMemAddress;
+
+    // detect environment when initialize runtime, if not safe,
     // stop initialization and exit runtime at once.
-    bool EnableSecurityMode;
+    BOOL EnableSecurityMode;
 
     // disable detector for test or debug.
-    bool DisableDetector;
+    BOOL DisableDetector;
 
     // disable watchdog for implement single thread model.
     // it will overwrite the control from upper module.
-    bool DisableWatchdog;
+    BOOL DisableWatchdog;
 
     // disable sysmon for implement single thread model.
-    bool DisableSysmon;
+    BOOL DisableSysmon;
 
-    // not erase runtime instructions after call Runtime_M.Exit
-    bool NotEraseInstruction;
+    // not erase runtime instructions after call Runtime_M.Exit.
+    BOOL NotEraseInstruction;
 
-    // not adjust current memory page protect for erase runtime.
-    bool NotAdjustProtect;
+    // not adjust current memory page protect for initialize runtime.
+    BOOL NotAdjustProtect;
 
     // track current thread for test or debug mode.
     // it maybe improved the single thread model.
-    bool TrackCurrentThread;
-} Runtime_Opts;
+    BOOL TrackCurrentThread;
+};
 
 // InitRuntime is used to initialize runtime and return module methods.
 // If failed to initialize, use GetLastError to get error code.
-extern Runtime_M* InitRuntime(Runtime_Opts* opts);
-
-// reserve stub for store arguments
-#pragma warning(push)
-#pragma warning(disable: 4276)
-extern void Argument_Stub();
-#pragma warning(pop)
+// boot is used to protect instructions like Boot before Runtime,
+// if it is NULL, Runtime will only protect self.
+// if opts is NULL, runtime will load options from stub.
+Runtime_M* InitRuntime(void* boot, Runtime_Opts* opts);
 
 #endif // RUNTIME_H
