@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	cmdlineA := "test_x86.exe -arg 1234\x00"
+	cmdlineA := "test_x86.exe -arg 11\x00"
 	cmdlineW := stringToUTF16(cmdlineA)
 
 	args := []*argument.Arg{
@@ -31,12 +31,12 @@ func main() {
 	stub, err := argument.Encode(args...)
 	checkError(err)
 
-	fmt.Println("============x86============")
-	fmt.Println(dumpBytesHex(stub))
-	fmt.Println("===========================")
-	fmt.Println()
+	data := dumpBytesHex(stub)
+	fmt.Println(data)
+	err = os.WriteFile("../asm/inst/argument_x86.inst", []byte(data), 0644)
+	checkError(err)
 
-	cmdlineA = "test_x64.exe -arg 1234\x00"
+	cmdlineA = "test_x64.exe -arg 11\x00"
 	cmdlineW = stringToUTF16(cmdlineA)
 
 	args = []*argument.Arg{
@@ -55,9 +55,10 @@ func main() {
 	stub, err = argument.Encode(args...)
 	checkError(err)
 
-	fmt.Println("============x64============")
-	fmt.Println(dumpBytesHex(stub))
-	fmt.Println("===========================")
+	data = dumpBytesHex(stub)
+	fmt.Println(data)
+	err = os.WriteFile("../asm/inst/argument_x64.inst", []byte(data), 0644)
+	checkError(err)
 }
 
 func stringToUTF16(s string) string {
