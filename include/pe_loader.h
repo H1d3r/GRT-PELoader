@@ -17,6 +17,45 @@ typedef errno (*Exit_t)(uint32 exitCode);
 typedef errno (*Destroy_t)();
 
 typedef struct {
+    // set custom FindAPI from for hook or debug.
+    FindAPI_MA_t FindAPI;
+
+    // PE image memory address.
+    void* Image;
+
+    // for hook GetCommandLineA and GetCommandLineW,
+    // if them are NULL, call original GetCommandLine.
+    void* CommandLineA;
+    void* CommandLineW;
+
+    // set standard handles for hook GetStdHandle,
+    // if them are NULL, call original GetStdHandle.
+    HANDLE StdInput;
+    HANDLE StdOutput;
+    HANDLE StdError;
+
+    // wait main thread exit if it is a exe image.
+    BOOL WaitMain;
+
+    // if failed to load library, can continue it.
+    BOOL AllowSkipDLL;
+
+    // create NUL file for set StdInput, StdOutput and
+    // StdError for ignore console input/output.
+    // If it is true, it will overwrite standard handles.
+    BOOL IgnoreStdIO;
+
+    // not running PE image after load.
+    // this field takes effect only during Boot.
+    // it is used to make loader as a module.
+    BOOL NotAutoRun;
+
+    // not stop runtime when call ExitProcess.
+    // it is used to make loader as a module.
+    BOOL NotStopRuntime;
+} PELoader_Cfg;
+
+typedef struct {
     // absolute memory address about PE image base.
     void* ImageBase;
 
@@ -59,47 +98,10 @@ typedef struct {
     Destroy_t Destroy;
 } PELoader_M;
 
-typedef struct {
-    // set custom FindAPI from for hook or debug.
-    FindAPI_MA_t FindAPI;
-
-    // PE image memory address.
-    void* Image;
-
-    // for hook GetCommandLineA and GetCommandLineW,
-    // if them are NULL, call original GetCommandLine.
-    void* CommandLineA;
-    void* CommandLineW;
-
-    // set standard handles for hook GetStdHandle,
-    // if them are NULL, call original GetStdHandle.
-    HANDLE StdInput;
-    HANDLE StdOutput;
-    HANDLE StdError;
-
-    // wait main thread exit if it is a exe image.
-    BOOL WaitMain;
-
-    // if failed to load library, can continue it.
-    BOOL AllowSkipDLL;
-
-    // create NUL file for set StdInput, StdOutput and
-    // StdError for ignore console input/output.
-    // If it is true, it will overwrite standard handles.
-    BOOL IgnoreStdIO;
-
-    // not running PE image after load.
-    // it is used to make loader as a module.
-    BOOL NotAutoRun;
-
-    // not stop runtime when call ExitProcess.
-    // it is used to make loader as a module.
-    BOOL NotStopRuntime;
-} PELoader_Cfg;
-
 // InitPELoader is used to initialize PE loader, it will load PE file
 // from memory, but it will not run it, caller must use PELoader_M.
-// If failed to initialize, use GetLastError to get error code.
+// If failed to initialize PE loader, it will return NULL, call the
+// GetLastError to get the error code.
 PELoader_M* InitPELoader(Runtime_M* runtime, PELoader_Cfg* cfg);
 
 #endif // PE_LOADER_H
