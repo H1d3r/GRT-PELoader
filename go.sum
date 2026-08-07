@@ -1,10 +1,10 @@
 github.com/For-ACGN/LZSS v1.0.1 h1:5hvq1tNFAddB/j/WoMu1QZ+j0sSJMqyLRTav9RGxm0s=
 github.com/For-ACGN/LZSS v1.0.1/go.mod h1:tDZSnajYlOtkDujhgiAe4ItRQHdrlaJFcLOOlkyO71s=
-github.com/For-ACGN/monkey v1.0.1 h1:LgJow/8dG7iJOweEU1A1qSuTWde93lA+fWpSjjDrJY0=
-github.com/RTS-Framework/GRT-Develop v1.9.0 h1:o++WU2kW5gMIQ33h0PCOaqUMmPnFvqIcvlz+6BbhgF4=
-github.com/RTS-Framework/GRT-Develop v1.9.0/go.mod h1:5sCS37cBn0bPxmyAjop37kH/xiiq/nV6VEYiKHi8njk=
-github.com/RTS-Framework/Gleam-RT v0.0.0-20260224055149-b38f426d2d4a h1:3nG16cIGsf8xVLdfMpIqRDYj6MgeyhG32UDkSv4Dn24=
-github.com/RTS-Framework/Gleam-RT v0.0.0-20260224055149-b38f426d2d4a/go.mod h1:mYd0wEGmB/VdoE+r5ExbHm1p69VqB5WbrpW8UYJ3I7w=
+github.com/For-ACGN/monkey v1.0.2 h1:d4rdyndQ5zwvLKPAGn6BrCX55QmxHkqNPBALZEagr88=
+github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260724042059-76827c834101 h1:dYF79t3PoCC3iYPDD5e1+Nmpp0QoYrlX6tDfgf8+bN8=
+github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260724042059-76827c834101/go.mod h1:vEhAcdRocG9IKczfAKDwsJ2giTq9z++zqf9ResG3iKE=
+github.com/RTS-Framework/Gleam-RT v0.0.0-20260731062745-88cf195ee96a h1:MMP1zQrS0t+mPa9NdW5CvR6ywZrT/DdZvX/Np1SzR0E=
+github.com/RTS-Framework/Gleam-RT v0.0.0-20260731062745-88cf195ee96a/go.mod h1:0SisTrtMYCT46GasksLitr6u+dMdmVQoAw8kQYyqgVg=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -20,8 +20,8 @@ github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXl
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-golang.org/x/sys v0.29.0 h1:TPYlXGxvx1MGTn2GiZDhnjPA9wZzZeGKHHmKhHYvgaU=
-golang.org/x/sys v0.29.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+golang.org/x/sys v0.30.0 h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=
+golang.org/x/sys v0.30.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
