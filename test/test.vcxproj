@@ -14,18 +14,18 @@
     <ClInclude Include="build.h" />
     <ClInclude Include="test.h" />
     <ClInclude Include="..\include\c_types.h" />
-	<ClInclude Include="..\include\win_types.h" />
+    <ClInclude Include="..\include\win_types.h" />
+    <ClInclude Include="..\include\win_structs.h" />
     <ClInclude Include="..\include\dll_kernel32.h" />
     <ClInclude Include="..\include\dll_msvcrt.h" />
     <ClInclude Include="..\include\dll_shell32.h" />
     <ClInclude Include="..\include\dll_ucrtbase.h" />
     <ClInclude Include="..\include\lib_memory.h" />
     <ClInclude Include="..\include\lib_string.h" />
-	<ClInclude Include="..\include\rel_addr.h" />
-    <ClInclude Include="..\include\hash_api.h" />
     <ClInclude Include="..\include\pe_image.h" />
+    <ClInclude Include="..\include\hash_api.h" />
     <ClInclude Include="..\include\win_api.h" />
-    <ClInclude Include="..\include\random.h" />
+    <ClInclude Include="..\include\rel_addr.h" />
     <ClInclude Include="..\include\errno.h" />
     <ClInclude Include="..\include\runtime.h" />
     <ClInclude Include="..\include\pe_loader.h" />
@@ -36,12 +36,12 @@
     <ClCompile Include="test_main.c" />
     <ClCompile Include="src\pe_loader_test.c" />
     <ClCompile Include="..\src\pe_loader.c" />
-    <ClCompile Include="..\src\rel_addr.c" />
     <ClCompile Include="..\src\lib_memory.c" />
     <ClCompile Include="..\src\lib_string.c" />
+    <ClCompile Include="..\src\pe_image.c" />
     <ClCompile Include="..\src\hash_api.c" />
     <ClCompile Include="..\src\win_api.c" />
-    <ClCompile Include="..\src\random.c" />
+    <ClCompile Include="..\src\rel_addr.c" />
     <ClCompile Include="..\src\errno.c" />
     <ClCompile Include="..\src\debug.c" />
   </ItemGroup>
@@ -64,7 +64,6 @@
     <MASM Include="..\asm\msvc\ullshr.asm">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </MASM>
-    <MASM Include="..\asm\_random.asm" />
     <MASM Include="..\asm\runtime.asm" />
     <MASM Include="..\asm\epilogue.asm" />
   </ItemGroup>
@@ -105,11 +104,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <GenerateManifest>false</GenerateManifest>
-    <TargetName>test_main</TargetName>
+    <TargetName>test</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <GenerateManifest>false</GenerateManifest>
-    <TargetName>test_main</TargetName>
+    <TargetName>test</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>

@@ -44,14 +44,14 @@
     <ClCompile Include="..\src\pe_loader.c">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\random.c">
-      <Filter>Source</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\win_api.c">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="src\pe_loader_test.c">
       <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\pe_image.c">
+      <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -88,9 +88,6 @@
     <ClInclude Include="..\include\pe_loader.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\random.h">
-      <Filter>Header</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\win_api.h">
       <Filter>Header</Filter>
     </ClInclude>
@@ -115,15 +112,15 @@
     <ClInclude Include="..\include\dll_shell32.h">
       <Filter>Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\win_structs.h">
+      <Filter>Header</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\asm\epilogue.asm">
       <Filter>Assembly</Filter>
     </MASM>
     <MASM Include="..\asm\runtime.asm">
-      <Filter>Assembly</Filter>
-    </MASM>
-    <MASM Include="..\asm\_random.asm">
       <Filter>Assembly</Filter>
     </MASM>
     <MASM Include="..\asm\msvc\llmul.asm">
