@@ -119,7 +119,7 @@ func TestEmbedInstance(t *testing.T) {
 					inst, err := CreateInstance("386", img, opts)
 					require.NoError(t, err)
 
-					addr := loadShellcode(t, inst)
+					addr := loadInstance(t, inst)
 					ret, _, _ := syscallN(addr)
 					require.NotEqual(t, uintptr(0), ret)
 				}(img)
@@ -158,7 +158,7 @@ func TestEmbedInstance(t *testing.T) {
 					inst, err := CreateInstance("amd64", img, opts)
 					require.NoError(t, err)
 
-					addr := loadShellcode(t, inst)
+					addr := loadInstance(t, inst)
 					ret, _, _ := syscallN(addr)
 					require.NotEqual(t, uintptr(0), ret)
 				}(img)

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func loadShellcode(t *testing.T, sc []byte) uintptr {
+func loadInstance(t *testing.T, inst []byte) uintptr {
 	return 0
 }
 

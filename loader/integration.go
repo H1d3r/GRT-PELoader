@@ -102,7 +102,8 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	// prepare memory page for write instance
 	var instAddr uintptr
 	if opts.OnRuntime {
-		// use VirtualAllocEx for let GleamRT not track these pages
+		// TODO use getProcessRaw
+		// use raw VirtualAllocEx for let GleamRT not track these pages
 		hProcess := uintptr(windows.CurrentProcess())
 		mType := uintptr(windows.MEM_COMMIT | windows.MEM_RESERVE)
 		mProtect := uintptr(windows.PAGE_READWRITE)

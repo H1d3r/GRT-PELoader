@@ -116,8 +116,8 @@ func NewPELoader(ptr uintptr) *PELoaderM {
 	return &ldr
 }
 
-// InitPELoader is used to initialize PE Loader from shellcode instance.
-// Each shellcode instance can only initialize once.
+// InitPELoader is used to initialize PE Loader from instance.
+// Each PE Loader instance can only initialize once.
 func InitPELoader(addr uintptr, runtime *gleamrt.RuntimeM, config *Config) (*PELoaderM, error) {
 	ptr, _, err := syscall.SyscallN(
 		addr, uintptr(unsafe.Pointer(runtime)), uintptr(unsafe.Pointer(config)),

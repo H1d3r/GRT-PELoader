@@ -168,7 +168,7 @@ func TestCreateInstance(t *testing.T) {
 		}
 
 		inst, err := CreateInstance("386", image, &opts)
-		errStr := "failed to set runtime option: invalid runtime shellcode template"
+		errStr := "failed to set runtime option: invalid runtime template"
 		require.EqualError(t, err, errStr)
 		require.Nil(t, inst)
 	})

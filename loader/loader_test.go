@@ -68,7 +68,7 @@ func TestPELoader(t *testing.T) {
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
-		addr := loadShellcode(t, inst)
+		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ptr, err)
 		PELoaderM := NewPELoader(ptr)
@@ -86,7 +86,7 @@ func TestPELoader(t *testing.T) {
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
-		addr := loadShellcode(t, inst)
+		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ptr, err)
 		PELoaderM := NewPELoader(ptr)
@@ -127,7 +127,7 @@ func TestPELoader(t *testing.T) {
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
-		addr := loadShellcode(t, inst)
+		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ptr, err)
 	})
@@ -152,7 +152,7 @@ func TestPELoader(t *testing.T) {
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
 
-		addr := loadShellcode(t, inst)
+		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr)
 		require.NotEqual(t, uintptr(0), ptr, err)
 		PELoaderM := NewPELoader(ptr)
@@ -168,7 +168,7 @@ func TestPELoader(t *testing.T) {
 }
 
 func TestTrimmedPELoader(t *testing.T) {
-	// process Gleam-RT shellcode data
+	// process Gleam-RT instruction
 	var (
 		ldr  []byte
 		data []byte
@@ -197,7 +197,7 @@ func TestTrimmedPELoader(t *testing.T) {
 
 	t.Run("exe", func(t *testing.T) {
 		// initialize Gleam-RT
-		addr := loadShellcode(t, rt)
+		addr := loadInstance(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
 		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
 		require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 
 		// initialize PELoader
-		addr = loadShellcode(t, ldr)
+		addr = loadInstance(t, ldr)
 		fmt.Printf("PE Loader: 0x%X\n", addr)
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestTrimmedPELoader(t *testing.T) {
 
 	t.Run("dll", func(t *testing.T) {
 		// initialize Gleam-RT
-		addr := loadShellcode(t, rt)
+		addr := loadInstance(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
 		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
 		require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 
 		// initialize PELoader
-		addr = loadShellcode(t, ldr)
+		addr = loadInstance(t, ldr)
 		fmt.Printf("PE Loader: 0x%X\n", addr)
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)
@@ -270,7 +270,7 @@ func TestTrimmedPELoader(t *testing.T) {
 
 	t.Run("ignore output", func(t *testing.T) {
 		// initialize Gleam-RT
-		addr := loadShellcode(t, rt)
+		addr := loadInstance(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
 		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
 		require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 
 		// initialize PELoader
-		addr = loadShellcode(t, ldr)
+		addr = loadInstance(t, ldr)
 		fmt.Printf("PE Loader: 0x%X\n", addr)
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestTrimmedPELoader(t *testing.T) {
 
 	t.Run("start and wait", func(t *testing.T) {
 		// initialize Gleam-RT
-		addr := loadShellcode(t, rt)
+		addr := loadInstance(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
 		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
 		require.NoError(t, err)
@@ -331,7 +331,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 
 		// initialize PELoader
-		addr = loadShellcode(t, ldr)
+		addr = loadInstance(t, ldr)
 		fmt.Printf("PE Loader: 0x%X\n", addr)
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestTrimmedPELoader(t *testing.T) {
 
 	t.Run("start only", func(t *testing.T) {
 		// initialize Gleam-RT
-		addr := loadShellcode(t, rt)
+		addr := loadInstance(t, rt)
 		fmt.Printf("Runtime:   0x%X\n", addr)
 		RuntimeM, err := gleamrt.InitRuntime(addr, nil)
 		require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestTrimmedPELoader(t *testing.T) {
 		}
 
 		// initialize PELoader
-		addr = loadShellcode(t, ldr)
+		addr = loadInstance(t, ldr)
 		fmt.Printf("PE Loader: 0x%X\n", addr)
 		PELoaderM, err := InitPELoader(addr, RuntimeM, &config)
 		require.NoError(t, err)

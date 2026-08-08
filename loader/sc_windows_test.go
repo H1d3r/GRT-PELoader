@@ -9,15 +9,15 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func loadShellcode(t *testing.T, sc []byte) uintptr {
-	size := uintptr(len(sc))
+func loadInstance(t *testing.T, inst []byte) uintptr {
+	size := uintptr(len(inst))
 	mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
 	mProtect := uint32(windows.PAGE_EXECUTE_READWRITE)
-	scAddr, err := windows.VirtualAlloc(0, size, mType, mProtect)
+	addr, err := windows.VirtualAlloc(0, size, mType, mProtect)
 	require.NoError(t, err)
-	dst := unsafe.Slice((*byte)(unsafe.Pointer(scAddr)), size)
-	copy(dst, sc)
-	return scAddr
+	dst := unsafe.Slice((*byte)(unsafe.Pointer(addr)), size)
+	copy(dst, inst)
+	return addr
 }
 
 // for cross-compile

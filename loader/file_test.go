@@ -56,7 +56,7 @@ func TestFileInstance(t *testing.T) {
 				inst, err := CreateInstance("386", image, opts)
 				require.NoError(t, err)
 
-				addr := loadShellcode(t, inst)
+				addr := loadInstance(t, inst)
 				ret, _, _ := syscallN(addr)
 				require.NotEqual(t, uintptr(0), ret)
 			}()
@@ -85,7 +85,7 @@ func TestFileInstance(t *testing.T) {
 				inst, err := CreateInstance("amd64", image, opts)
 				require.NoError(t, err)
 
-				addr := loadShellcode(t, inst)
+				addr := loadInstance(t, inst)
 				ret, _, _ := syscallN(addr)
 				require.NotEqual(t, uintptr(0), ret)
 			}()
