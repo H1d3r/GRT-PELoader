@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -74,7 +73,7 @@ func TestHTTPInstance(t *testing.T) {
 		return
 	}
 
-	// start a http server
+	// start an http server
 	path, err := filepath.Abs("../test/image")
 	require.NoError(t, err)
 	serverMux := http.NewServeMux()
@@ -100,8 +99,7 @@ func TestHTTPInstance(t *testing.T) {
 	require.NoError(t, err)
 	httpAddr := listener.Addr().String()
 	go func() {
-		err = server.Serve(listener)
-		require.NoError(t, err)
+		_ = server.Serve(listener)
 	}()
 	defer func() {
 		_ = server.Close()
@@ -116,61 +114,37 @@ func TestHTTPInstance(t *testing.T) {
 	}
 	opts.Headers.Set("Header1", "h1")
 
-	wg := sync.WaitGroup{}
-	t.Run("x86", func(t *testing.T) {
-		if runtime.GOARCH != "386" {
-			return
-		}
-
-		for _, item := range images {
-			URL := fmt.Sprintf("http://%s/x86/%s", httpAddr, item.path)
+	test := func(url string) {
+		for _, item := range testImages {
+			URL := fmt.Sprintf(url, httpAddr, item)
 			image := NewHTTP(URL, opts)
 			opts := &Options{
 				ImageName:    "test.exe",
 				CommandLine:  "-p1 123 -p2 \"hello\"",
-				WaitMain:     item.wait,
+				WaitMain:     true,
 				AllowSkipDLL: true,
 			}
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				inst, err := CreateInstance("386", image, opts)
-				require.NoError(t, err)
+			inst, err := CreateInstance(runtime.GOARCH, image, opts)
+			require.NoError(t, err)
 
-				addr := loadInstance(t, inst)
-				ret, _, _ := syscallN(addr)
-				require.NotEqual(t, uintptr(0), ret)
-			}()
+			addr := loadInstance(t, inst)
+			ret, _, _ := syscallN(addr, 0)
+			require.NotEqual(t, uintptr(0), ret, err)
 		}
+	}
+
+	t.Run("x86", func(t *testing.T) {
+		if runtime.GOARCH != "386" {
+			return
+		}
+		test("http://%s/x86/%s")
 	})
 
 	t.Run("x64", func(t *testing.T) {
 		if runtime.GOARCH != "amd64" {
 			return
 		}
-
-		for _, item := range images {
-			URL := fmt.Sprintf("http://%s/x64/%s", httpAddr, item.path)
-			image := NewHTTP(URL, opts)
-			opts := &Options{
-				ImageName:    "test.exe",
-				CommandLine:  "-p1 123 -p2 \"hello\"",
-				WaitMain:     item.wait,
-				AllowSkipDLL: true,
-			}
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				inst, err := CreateInstance("amd64", image, opts)
-				require.NoError(t, err)
-
-				addr := loadInstance(t, inst)
-				ret, _, _ := syscallN(addr)
-				require.NotEqual(t, uintptr(0), ret)
-			}()
-		}
+		test("http://%s/x64/%s")
 	})
-	wg.Wait()
 }
