@@ -5,9 +5,9 @@
 
 // not use function main() for not use "msvcrt.dll"
 // not use CommandLineToArgvW for not load "shell32.dll"
-// so it only read the ".\test_x64.bin" or ".\test_x86.bin"
+// so it only read the ".\instance_x64.bin" or ".\instance_x86.bin"
 
-typedef uint (*entryPoint_t)();
+typedef uint (*entryPoint_t)(void* ctx);
 
 #pragma comment(linker, "/ENTRY:EntryPoint")
 uint EntryPoint()
@@ -18,12 +18,13 @@ uint EntryPoint()
     GetFileSizeEx_t GetFileSizeEx = FindAPI_A("kernel32.dll", "GetFileSizeEx");
     ReadFile_t      ReadFile      = FindAPI_A("kernel32.dll", "ReadFile");
     CloseHandle_t   CloseHandle   = FindAPI_A("kernel32.dll", "CloseHandle");
+    Sleep_t         Sleep         = FindAPI_A("kernel32.dll", "Sleep");
 
-    // read shellcode from file
+    // read instance from the fixed file path
 #ifdef _WIN64
-    LPCSTR fileName = "test_x64.bin";
+    LPCSTR fileName = "instance_x64.bin";
 #elif _WIN32
-    LPCSTR fileName = "test_x86.bin";
+    LPCSTR fileName = "instance_x86.bin";
 #endif
     HANDLE hFile = CreateFileA(
         fileName, GENERIC_READ, 0, NULL, 
@@ -53,13 +54,19 @@ uint EntryPoint()
         return 5;
     }
 
-    // execute shellcode
-    uint exitCode = ((entryPoint_t)(buf))();
+     // wait some time for build base metric
+    Sleep(15 * 1000);
+
+    // execute instance
+    uint exitCode = ((entryPoint_t)(buf))(NULL);
 
     // clean resource
     if (!VirtualFree(buf, 0, MEM_RELEASE))
     {
         return 6;
     }
+
+    // wait some time for check resource leak
+    Sleep(600 * 1000);
     return exitCode;
 }
