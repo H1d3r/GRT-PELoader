@@ -59,10 +59,10 @@ func init() {
 	var err error
 	GleamRT, err = windows.LoadDLL("GleamRT.dll")
 	if err != nil {
-		fmt.Println("[warning] failed to load virtual runtime dll")
+		fmt.Println("[warning] failed to load runtime dll")
 		return
 	}
-	fmt.Println("[info] virtual runtime dll loaded")
+	fmt.Println("[info] runtime dll is loaded")
 }
 
 func main() {
@@ -121,15 +121,17 @@ func testRuntimeAPI() {
 		"AS_GetPointer",
 		"AS_Erase",
 		"AS_EraseAll",
+		"AS_GetStatus",
 
 		"IS_SetValue",
 		"IS_GetValue",
 		"IS_GetPointer",
 		"IS_Delete",
 		"IS_DeleteAll",
+		"IS_GetStatus",
 
 		"DT_Detect",
-		"DT_Status",
+		"DT_GetStatus",
 
 		"WD_SetHandler",
 		"WD_SetTimeout",
@@ -137,11 +139,11 @@ func testRuntimeAPI() {
 		"WD_Enable",
 		"WD_Disable",
 		"WD_IsEnabled",
-		"WD_Status",
+		"WD_GetStatus",
 
-		"SM_Status",
+		"SM_GetStatus",
 
-		"SD_Status",
+		"SD_GetStatus",
 	} {
 		dllProcAddr := GleamRT.MustFindProc(proc).Addr()
 		getProcAddr, err := windows.GetProcAddress(hGleamRT, proc)
