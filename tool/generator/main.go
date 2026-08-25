@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/RTS-Framework/GRT-Develop/option"
+	"github.com/RTS-Framework/GRT-Develop/instance"
 	"github.com/RTS-Framework/GRT-PELoader/loader"
 )
 
@@ -27,22 +27,20 @@ var (
 )
 
 func init() {
-	flag.StringVar(&tplDir, "tpl", "", "set custom shellcode templates directory")
+	flag.StringVar(&tplDir, "tpl", "", "set custom PE Loader templates directory")
 	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
-	flag.StringVar(&arch, "arch", "amd64", "set shellcode template architecture")
+	flag.StringVar(&arch, "arch", "amd64", "set PE Loader template architecture")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
-	flag.BoolVar(&compress, "compress", true, "compress image when use embed mode")
+	flag.BoolVar(&compress, "compress", false, "compress image when use embed mode")
 	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
 	flag.DurationVar(&httpOpts.ConnectTimeout, "timeout", 0, "set the timeout when use http mode")
 	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
-	flag.BoolVar(&options.WaitMain, "wait", false, "wait for shellcode to exit")
+	flag.BoolVar(&options.WaitMain, "wait", false, "wait for image main thread to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
-	flag.BoolVar(&options.NotAutoRun, "nar", false, "not running PE image after load")
-	flag.BoolVar(&options.NotStopRuntime, "nsr", false, "not stop runtime when call ExitProcess")
-	flag.StringVar(&outPath, "o", "output.bin", "set output shellcode file path")
-	option.Flag(&options.Runtime)
+	flag.StringVar(&outPath, "o", "output.bin", "set output instance file path")
+	instance.Flag(&options.Runtime)
 	flag.Parse()
 }
 
@@ -106,7 +104,7 @@ func main() {
 		return
 	}
 
-	// select shellcode template
+	// select loader template
 	var template []byte
 	switch arch {
 	case "386":
@@ -123,17 +121,17 @@ func main() {
 		options.Template = template
 	}
 
-	fmt.Println("generate GRT-PELoader from template")
-	instance, err := loader.CreateInstance(arch, image, &options)
+	fmt.Println("create instance from template")
+	inst, err := loader.CreateInstance(arch, image, &options)
 	checkError(err)
 
 	outPath, err = filepath.Abs(outPath)
 	checkError(err)
 	fmt.Println("save instance to:", outPath)
-	err = os.WriteFile(outPath, instance, 0600) // #nosec
+	err = os.WriteFile(outPath, inst, 0600) // #nosec
 	checkError(err)
 
-	fmt.Println("generate shellcode successfully")
+	fmt.Println("create instance successfully")
 }
 
 func checkError(err error) {
