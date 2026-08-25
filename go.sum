@@ -1,10 +1,10 @@
 github.com/For-ACGN/LZSS v1.0.1 h1:5hvq1tNFAddB/j/WoMu1QZ+j0sSJMqyLRTav9RGxm0s=
 github.com/For-ACGN/LZSS v1.0.1/go.mod h1:tDZSnajYlOtkDujhgiAe4ItRQHdrlaJFcLOOlkyO71s=
 github.com/For-ACGN/monkey v1.0.2 h1:d4rdyndQ5zwvLKPAGn6BrCX55QmxHkqNPBALZEagr88=
-github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260820063042-162517a4dd7a h1:fmPF5CWRLU5sajYhd/wpt1Zwtr/T7A2HIZ/sDxZQZ0A=
-github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260820063042-162517a4dd7a/go.mod h1:2K9ZTg23Wjn2KZ46RczjtQdwKVcfyoDrz9Hw0Ja5Imk=
-github.com/RTS-Framework/Gleam-RT v0.0.0-20260820065551-bca20bd88127 h1:V02ixnsKRyWbsdzB3439MLDJsfV9+jeTrLUwVL0qtWo=
-github.com/RTS-Framework/Gleam-RT v0.0.0-20260820065551-bca20bd88127/go.mod h1:iB/ZtQUPms6iG8peDcdDaW4l5UfPqWozdN+F8shEyB4=
+github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260824044720-2bc205640965 h1:x/6jloUy50kHDPyU/MdtZxKtnaqKKego8uSRCHuU6vk=
+github.com/RTS-Framework/GRT-Develop v1.9.1-0.20260824044720-2bc205640965/go.mod h1:2K9ZTg23Wjn2KZ46RczjtQdwKVcfyoDrz9Hw0Ja5Imk=
+github.com/RTS-Framework/Gleam-RT v0.0.0-20260825050930-3db9070373a1 h1:abyCUo9bhg1WHHJSpeDZfKdETv2kPsoyK8EzUEj8ZjE=
+github.com/RTS-Framework/Gleam-RT v0.0.0-20260825050930-3db9070373a1/go.mod h1:OCr0lKdOuR/7GJ+g47Q3h8jLoPA9hRVbB8BGYZmZIjM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
