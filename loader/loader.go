@@ -97,6 +97,7 @@ type PELoaderM struct {
 	wait uintptr
 
 	// create a thread at EntryPoint, it can call multi times.
+	// it equaled call start and wait.
 	execute uintptr
 
 	// release all resource, it can call multi times.
@@ -190,6 +191,7 @@ func (ldr *PELoaderM) Wait() error {
 }
 
 // Execute is used to execute exe or call DllMain with DLL_PROCESS_ATTACH.
+// It equaled call Start and Wait.
 // It can call multi times with Exit.
 func (ldr *PELoaderM) Execute() error {
 	en, _, _ := syscall.SyscallN(ldr.execute)
