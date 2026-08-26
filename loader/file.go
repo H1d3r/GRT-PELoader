@@ -2,6 +2,8 @@ package loader
 
 import (
 	"bytes"
+
+	"github.com/RTS-Framework/GRT-Develop/types"
 )
 
 // +-----------+-----------+
@@ -28,7 +30,7 @@ func (f *File) Encode() ([]byte, error) {
 	// write the mode
 	buffer.WriteByte(modeFile)
 	// write the file path
-	buffer.WriteString(stringToUTF16(f.Path))
+	buffer.Write(types.StringToUTF16(f.Path))
 	return buffer.Bytes(), nil
 }
 
