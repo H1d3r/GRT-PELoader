@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/RTS-Framework/GRT-Develop/option"
+	"github.com/RTS-Framework/GRT-Develop/instance"
 	"github.com/RTS-Framework/GRT-PELoader/loader"
 )
 
@@ -19,23 +19,23 @@ var (
 	tplDir string
 	pePath string
 	proc   string
+	loop   bool
 	wait   time.Duration
 
 	options loader.Options
 )
 
 func init() {
-	flag.StringVar(&tplDir, "tpl", "", "set custom shellcode templates directory")
+	flag.StringVar(&tplDir, "tpl", "", "set custom PE Loader templates directory")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
 	flag.StringVar(&proc, "proc", "", "call the export procedure without argument for test")
+	flag.BoolVar(&loop, "loop", false, "start only for test the watchdog")
 	flag.DurationVar(&wait, "wait", 5*time.Second, "wait time after call DllMain for DLL")
-	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
+	flag.StringVar(&options.ImageName, "name", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
-	flag.BoolVar(&options.WaitMain, "wm", false, "wait for shellcode to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
-	flag.BoolVar(&options.NotStopRuntime, "nsr", false, "not stop runtime when call ExitProcess")
-	option.Flag(&options.Runtime)
+	instance.Flag(&options.Runtime)
 	flag.Parse()
 }
 
@@ -86,7 +86,7 @@ func main() {
 		return
 	}
 
-	// select custom shellcode template
+	// select custom PE loader template
 	var template []byte
 	switch arch {
 	case "386":
@@ -108,30 +108,37 @@ func main() {
 
 	fmt.Println("load PE image to memory")
 	image := loader.NewFile(pePath)
-	instance, err := loader.LoadInMemoryImage(image, arch, &options)
+	inst, err := loader.LoadInMemoryImage(image, arch, &options)
 	checkError(err)
 
 	fmt.Println("PE image is running")
 	fmt.Println("================================")
 	fmt.Println()
 
-	err = instance.Run()
+	if loop {
+		err = inst.Start()
+		checkError(err)
+		time.Sleep(time.Hour)
+		return
+	}
+
+	err = inst.Run()
 	checkError(err)
 
 	if proc != "" {
 		fmt.Println("call export procedure")
-		p, err := instance.GetProcAddress(proc)
+		p, err := inst.GetProcAddress(proc)
 		checkError(err)
 		ret, _, err := syscall.SyscallN(p)
 		fmt.Println("return value:", ret)
 		fmt.Println(err)
 	}
-	if instance.IsDLL {
+	if inst.IsDLL.ToBool() {
 		fmt.Println("DllMain is running")
 		time.Sleep(wait)
 	}
 
-	err = instance.Free()
+	err = inst.Free()
 	checkError(err)
 	fmt.Println()
 	fmt.Println("================================")
