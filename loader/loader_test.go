@@ -14,7 +14,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 
 	"github.com/RTS-Framework/GRT-Develop/instance"
@@ -72,7 +71,7 @@ func TestStandard(t *testing.T) {
 
 		opts := &Options{
 			ImageName: "test.exe",
-			WaitMain:  false,
+			WaitMain:  true,
 
 			StdInput:  0,
 			StdOutput: uint64(w.Fd()),
@@ -84,16 +83,11 @@ func TestStandard(t *testing.T) {
 		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr, 0)
 		require.NotEqual(t, uintptr(0), ptr, err)
-		PELoaderM := NewPELoader(ptr)
-		spew.Dump(PELoaderM)
-
-		time.Sleep(5 * time.Second)
 	})
 
 	t.Run("dll", func(t *testing.T) {
 		image := NewFile("C:\\Windows\\System32\\ws2_32.dll")
 		opts := &Options{
-			WaitMain:     false,
 			AllowSkipDLL: true,
 		}
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
@@ -103,7 +97,6 @@ func TestStandard(t *testing.T) {
 		ptr, _, err := syscallN(addr, 0)
 		require.NotEqual(t, uintptr(0), ptr, err)
 		PELoaderM := NewPELoader(ptr)
-		spew.Dump(PELoaderM)
 
 		connect, err := PELoaderM.GetProcAddress("connect")
 		require.NoError(t, err)
@@ -158,10 +151,9 @@ func TestStandard(t *testing.T) {
 		}
 
 		opts := &Options{
-			ImageName:      "test.exe",
-			CommandLine:    "-kick 50",
-			WaitMain:       false,
-			NotStopRuntime: true,
+			ImageName:   "test.exe",
+			CommandLine: "-kick 50",
+			WaitMain:    false,
 		}
 		inst, err := CreateInstance(runtime.GOARCH, image, opts)
 		require.NoError(t, err)
@@ -170,7 +162,6 @@ func TestStandard(t *testing.T) {
 		ptr, _, err := syscallN(addr, 0)
 		require.NotEqual(t, uintptr(0), ptr, err)
 		PELoaderM := NewPELoader(ptr)
-		spew.Dump(PELoaderM)
 
 		time.Sleep(3 * time.Second)
 
@@ -178,6 +169,9 @@ func TestStandard(t *testing.T) {
 		require.NoError(t, err)
 		code := PELoaderM.ExitCode()
 		require.Equal(t, uint(123), code)
+
+		err = PELoaderM.Destroy()
+		require.NoError(t, err)
 	})
 }
 
@@ -255,6 +249,108 @@ func TestPipeline(t *testing.T) {
 		addr := loadInstance(t, inst)
 		ptr, _, err := syscallN(addr, 0)
 		require.NotEqual(t, uintptr(0), ptr, err)
+	})
+
+	t.Run("dll", func(t *testing.T) {
+		image := NewFile("C:\\Windows\\System32\\ws2_32.dll")
+		opts := &Options{
+			Template: template,
+
+			WaitMain:     false,
+			AllowSkipDLL: true,
+
+			IgnoreInstOpts: true,
+		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
+		require.NoError(t, err)
+
+		addr := loadInstance(t, inst)
+		ptr, _, err := syscallN(addr, 0)
+		require.NotEqual(t, uintptr(0), ptr, err)
+		PELoaderM := NewPELoader(ptr)
+
+		connect, err := PELoaderM.GetProcAddress("connect")
+		require.NoError(t, err)
+		fmt.Printf("ws2_32.connect: 0x%X\n", connect)
+
+		// call DllMain DLL_PROCESS_DETACH
+		err = PELoaderM.Exit(0)
+		require.NoError(t, err)
+
+		err = PELoaderM.Destroy()
+		require.NoError(t, err)
+	})
+
+	t.Run("ignore output", func(t *testing.T) {
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/rust_msvc.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/rust_msvc.exe")
+		default:
+			t.Fatal("unsupported architecture")
+		}
+
+		opts := &Options{
+			Template: template,
+
+			ImageName: "test.exe",
+
+			StdInput:  1, // will be overwritten
+			StdOutput: 2, // will be overwritten
+			StdError:  3, // will be overwritten
+
+			WaitMain:    true,
+			IgnoreStdIO: true,
+
+			IgnoreInstOpts: true,
+		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
+		require.NoError(t, err)
+
+		addr := loadInstance(t, inst)
+		ptr, _, err := syscallN(addr, 0)
+		require.NotEqual(t, uintptr(0), ptr, err)
+	})
+
+	t.Run("exit", func(t *testing.T) {
+		var image Image
+		switch runtime.GOARCH {
+		case "386":
+			image = NewFile("../test/image/x86/go.exe")
+		case "amd64":
+			image = NewFile("../test/image/x64/go.exe")
+		default:
+			t.Fatal("unsupported architecture")
+		}
+
+		opts := &Options{
+			Template: template,
+
+			ImageName:   "test.exe",
+			CommandLine: "-kick 50",
+			WaitMain:    false,
+
+			IgnoreInstOpts: true,
+		}
+		inst, err := CreateInstance(runtime.GOARCH, image, opts)
+		require.NoError(t, err)
+
+		addr := loadInstance(t, inst)
+		ptr, _, err := syscallN(addr, 0)
+		require.NotEqual(t, uintptr(0), ptr, err)
+		PELoaderM := NewPELoader(ptr)
+
+		time.Sleep(3 * time.Second)
+
+		err = PELoaderM.Exit(123)
+		require.NoError(t, err)
+		code := PELoaderM.ExitCode()
+		require.Equal(t, uint(123), code)
+
+		err = PELoaderM.Destroy()
+		require.NoError(t, err)
 	})
 }
 
@@ -439,7 +535,7 @@ func TestModule(t *testing.T) {
 		err = PELoaderM.Wait()
 		require.NoError(t, err)
 
-		err = PELoaderM.Destroy()
+		err = RuntimeM.Exit()
 		require.NoError(t, err)
 	})
 
@@ -487,7 +583,7 @@ func TestModule(t *testing.T) {
 		code := PELoaderM.ExitCode()
 		require.Equal(t, uint(123), code)
 
-		err = PELoaderM.Destroy()
+		err = RuntimeM.Exit()
 		require.NoError(t, err)
 	})
 }
