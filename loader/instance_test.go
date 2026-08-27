@@ -9,15 +9,11 @@ import (
 	"github.com/RTS-Framework/GRT-Develop/argument"
 )
 
-var images = []struct {
-	path string
-	wait bool
-}{
-	{"go.exe", false},
-	{"rust_msvc.exe", true},
-	{"rust_gnu.exe", true},
-	{"ucrtbase_main.exe", true},
-	{"ucrtbase_wmain.exe", true},
+var testImages = []string{
+	"rust_msvc.exe",
+	"rust_gnu.exe",
+	"ucrtbase_main.exe",
+	"ucrtbase_wmain.exe",
 }
 
 func TestCreateInstance(t *testing.T) {
@@ -36,10 +32,23 @@ func TestCreateInstance(t *testing.T) {
 	})
 
 	t.Run("custom template", func(t *testing.T) {
-		template, err := os.ReadFile("../dist/PELoader_x86.bin")
+		template, err := os.ReadFile("../dist/standard/PELoader_x86.bin")
 		require.NoError(t, err)
 		opts := Options{
 			Template: template,
+		}
+
+		inst, err := CreateInstance("386", image, &opts)
+		require.NoError(t, err)
+		require.NotNil(t, inst)
+	})
+
+	t.Run("ignore instantiate options", func(t *testing.T) {
+		template, err := os.ReadFile("../dist/pipeline/PELoader_x86.bin")
+		require.NoError(t, err)
+		opts := Options{
+			Template:       template,
+			IgnoreInstOpts: true,
 		}
 
 		inst, err := CreateInstance("386", image, &opts)
@@ -168,12 +177,11 @@ func TestCreateInstance(t *testing.T) {
 		}
 
 		inst, err := CreateInstance("386", image, &opts)
-		errStr := "failed to set runtime option: invalid runtime template"
-		require.EqualError(t, err, errStr)
+		require.EqualError(t, err, "invalid runtime template")
 		require.Nil(t, inst)
 	})
 
-	t.Run("appear the same argument id", func(t *testing.T) {
+	t.Run("same argument id", func(t *testing.T) {
 		args := []*argument.Arg{
 			{ID: 100, Data: []byte("config data 1")},
 			{ID: 100, Data: []byte("config data 2")},
@@ -183,7 +191,7 @@ func TestCreateInstance(t *testing.T) {
 		}
 
 		inst, err := CreateInstance("386", image, &opts)
-		errStr := "failed to encode argument: argument id 100 is already exists"
+		errStr := "failed to encode argument: argument id 100 already exists"
 		require.EqualError(t, err, errStr)
 		require.Nil(t, inst)
 	})
