@@ -15,13 +15,11 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/RTS-Framework/Gleam-RT/runtime"
 )
 
-var (
-	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
-
-	procVirtualAllocEx = modKernel32.NewProc("VirtualAllocEx")
-)
+var modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
 // Instance contains the allocated memory page and pipe.
 type Instance struct {
@@ -39,6 +37,8 @@ type Instance struct {
 
 	sameOutErr bool
 	outErrMu   sync.Mutex
+
+	wg sync.WaitGroup
 }
 
 // LoadInMemoryEXE is used to load an unmanaged exe image to memory.
@@ -83,7 +83,7 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	options := *opts
 	// process pipe for set standard handle
 	instance := Instance{}
-	err := instance.startPipe(&options)
+	err := instance.startStdPipe(&options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start pipe: %s", err)
 	}
@@ -101,28 +101,27 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	size := uintptr(len(inst))
 	// prepare memory page for write instance
 	var instAddr uintptr
-	if opts.OnRuntime {
-		// TODO use getProcessRaw
-		// use raw VirtualAllocEx for let GleamRT not track these pages
-		hProcess := uintptr(windows.CurrentProcess())
+	if gleamrt.IsOnRuntime() {
+		// use raw VirtualAlloc for let runtime not track these pages
+		hKernel32 := windows.Handle(modKernel32.Handle())
+		proc, err := gleamrt.GetProcAddressRaw(hKernel32, "VirtualAlloc")
+		if err != nil {
+			return nil, err
+		}
+		// TODO add spoof call
 		mType := uintptr(windows.MEM_COMMIT | windows.MEM_RESERVE)
-		mProtect := uintptr(windows.PAGE_READWRITE)
-		instAddr, _, err = procVirtualAllocEx.Call(hProcess, 0, size, mType, mProtect)
+		mProtect := uintptr(windows.PAGE_EXECUTE_READWRITE)
+		instAddr, _, err = syscall.SyscallN(proc, 0, size, mType, mProtect)
 		if instAddr == 0 {
 			return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
 		}
 	} else {
 		mType := uint32(windows.MEM_COMMIT | windows.MEM_RESERVE)
-		mProtect := uint32(windows.PAGE_READWRITE)
+		mProtect := uint32(windows.PAGE_EXECUTE_READWRITE)
 		instAddr, err = windows.VirtualAlloc(0, size, mType, mProtect)
 		if err != nil {
 			return nil, fmt.Errorf("failed to alloc memory for instance: %s", err)
 		}
-	}
-	var old uint32
-	err = windows.VirtualProtect(instAddr, size, windows.PAGE_EXECUTE_READWRITE, &old)
-	if err != nil {
-		return nil, fmt.Errorf("failed to change memory protect: %s", err)
 	}
 	instData := unsafe.Slice((*byte)(unsafe.Pointer(instAddr)), len(inst)) // #nosec
 	copy(instData, inst)
@@ -139,7 +138,7 @@ func LoadInMemoryImage(image Image, arch string, opts *Options) (*Instance, erro
 	return &instance, nil
 }
 
-func (inst *Instance) startPipe(options *Options) error {
+func (inst *Instance) startStdPipe(options *Options) error {
 	if options.IgnoreStdIO {
 		return nil
 	}
@@ -179,7 +178,9 @@ func (inst *Instance) startStdinPipe(options *Options) error {
 	options.StdInput = uint64(r.Fd())
 	inst.stdInputR = r
 	inst.stdInputW = w
+	inst.wg.Add(1)
 	go func() {
+		defer inst.wg.Done()
 		_, _ = io.Copy(w, options.Stdin)
 	}()
 	return nil
@@ -196,7 +197,9 @@ func (inst *Instance) startStdoutPipe(options *Options) error {
 	options.StdOutput = uint64(w.Fd())
 	inst.stdOutputR = r
 	inst.stdOutputW = w
+	inst.wg.Add(1)
 	go func() {
+		defer inst.wg.Done()
 		if !inst.sameOutErr {
 			_, _ = io.Copy(options.Stdout, r)
 			return
@@ -217,7 +220,9 @@ func (inst *Instance) startStderrPipe(options *Options) error {
 	options.StdError = uint64(w.Fd())
 	inst.stdErrorR = r
 	inst.stdErrorW = w
+	inst.wg.Add(1)
 	go func() {
+		defer inst.wg.Done()
 		if !inst.sameOutErr {
 			_, _ = io.Copy(options.Stderr, r)
 			return
@@ -264,7 +269,7 @@ func (inst *Instance) closePipe() {
 
 // Run is used to start and wait image or execute dll_main.
 func (inst *Instance) Run() error {
-	if inst.IsDLL {
+	if inst.IsDLL.ToBool() {
 		return inst.Execute()
 	}
 	err := inst.Start()
@@ -278,7 +283,7 @@ func (inst *Instance) Run() error {
 func (inst *Instance) Restart() error {
 	err1 := inst.Exit(0)
 	var err2 error
-	if inst.IsDLL {
+	if inst.IsDLL.ToBool() {
 		err2 = inst.Execute()
 	} else {
 		err2 = inst.Start()
@@ -305,5 +310,6 @@ func (inst *Instance) free() error {
 		return err
 	}
 	inst.closePipe()
+	inst.wg.Wait()
 	return nil
 }
