@@ -102,24 +102,7 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 		return nil, fmt.Errorf("invalid %s mode config: %s", image.Mode(), err)
 	}
 	// process command line
-	var (
-		cmdLineA []byte
-		cmdLineW []byte
-	)
-	cmdLine := opts.CommandLine
-	if cmdLine != "" {
-		imageName := opts.ImageName
-		if imageName == "" {
-			imageName = "GRT-PELoader.exe"
-		}
-		if strings.Contains(imageName, " ") {
-			imageName = "\"" + imageName + "\""
-		}
-		imageName += " "
-		cmdLine = imageName + cmdLine
-		cmdLineA = []byte(cmdLine + "\x00")
-		cmdLineW = types.StringToUTF16(cmdLine)
-	}
+	cmdLineA, cmdLineW := processCommandLine(opts)
 	// process switch about loader config
 	var (
 		waitMain       = make([]byte, 1)
@@ -163,17 +146,10 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	if template == nil {
 		template = defaultTemplate
 	}
-	// instantiate from template
-	var inst []byte
-	if !opts.IgnoreInstOpts {
-		instOpts := opts.Runtime
-		instOpts.SkipArguments = true
-		inst, err = instance.Instantiate(template, &instOpts)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		inst = bytes.Clone(template)
+	// create instance
+	inst, err := instantiateFromTemplate(opts, template)
+	if err != nil {
+		return nil, err
 	}
 	// encode arguments at tail of instance
 	args := []*argument.Arg{
@@ -203,4 +179,30 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	return append(inst, stub...), nil
 }
 
-// TODO process command line
+func processCommandLine(opts *Options) ([]byte, []byte) {
+	if opts.CommandLine == "" {
+		return nil, nil
+	}
+	cmdLine := opts.CommandLine
+	imageName := opts.ImageName
+	if imageName == "" {
+		imageName = "GRT-PELoader.exe"
+	}
+	if strings.Contains(imageName, " ") {
+		imageName = "\"" + imageName + "\""
+	}
+	imageName += " "
+	cmdLine = imageName + cmdLine
+	cmdLineA := []byte(cmdLine + "\x00")
+	cmdLineW := types.StringToUTF16(cmdLine)
+	return cmdLineA, cmdLineW
+}
+
+func instantiateFromTemplate(opts *Options, template []byte) ([]byte, error) {
+	if opts.IgnoreInstOpts {
+		return bytes.Clone(template), nil
+	}
+	instOpts := opts.Runtime
+	instOpts.SkipArguments = true
+	return instance.Instantiate(template, &instOpts)
+}
