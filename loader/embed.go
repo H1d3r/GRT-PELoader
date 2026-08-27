@@ -33,42 +33,35 @@ const (
 // Embed is the embed mode.
 type Embed struct {
 	image []byte
+	opts  EmbedOptions
+}
 
-	compress   bool
-	windowSize int
-
-	preCompress bool
+// EmbedOptions contains Embed mode options.
+type EmbedOptions struct {
+	Compress      bool `toml:"compress"       json:"compress"`
+	WindowSize    int  `toml:"window_size"    json:"window_size"`
+	ChainLen      int  `toml:"chain_len"      json:"chain_len"`
+	PreCompressed bool `toml:"pre_compressed" json:"pre_compressed"`
 }
 
 // NewEmbed is used to create image with embed mode.
-func NewEmbed(image []byte) Image {
-	return &Embed{image: image}
-}
-
-// NewEmbedCompress is used to create embed with compression.
-func NewEmbedCompress(image []byte, windowSize int) Image {
-	return &Embed{
-		image:      image,
-		compress:   true,
-		windowSize: windowSize,
+func NewEmbed(image []byte, opts *EmbedOptions) Image {
+	if opts == nil {
+		opts = new(EmbedOptions)
 	}
-}
-
-// NewEmbedPreCompress is used to create embed with pre-compression.
-func NewEmbedPreCompress(image []byte) Image {
-	return &Embed{
-		image:       image,
-		compress:    true,
-		preCompress: true,
-	}
+	return &Embed{image: image, opts: *opts}
 }
 
 // Encode implement Image interface.
 func (e *Embed) Encode() ([]byte, error) {
 	// check PE image is valid
 	image := e.image
-	if e.preCompress {
-		image = lzss.Decompress(image)
+	if e.opts.PreCompressed {
+		var err error
+		image, err = lzss.Decompress(image)
+		if err != nil {
+			return nil, fmt.Errorf("invalid precompressed PE image: %s", err)
+		}
 	}
 	_, err := pe.NewFile(bytes.NewReader(image))
 	if err != nil {
@@ -78,7 +71,7 @@ func (e *Embed) Encode() ([]byte, error) {
 	// write the mode
 	buffer.WriteByte(modeEmbed)
 	// need use compress mode
-	if !e.compress {
+	if !e.opts.Compress {
 		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image))) // #nosec
 		buffer.WriteByte(disableCompression)
 		buffer.Write(size)
@@ -89,8 +82,8 @@ func (e *Embed) Encode() ([]byte, error) {
 	buffer.WriteByte(enableCompression)
 	// compress PE image
 	var compressed []byte
-	if !e.preCompress {
-		compressed, err = lzss.Compress(e.image, e.windowSize)
+	if !e.opts.PreCompressed {
+		compressed, err = lzss.Compress(e.image, e.opts.WindowSize, e.opts.ChainLen)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compress PE image: %s", err)
 		}
