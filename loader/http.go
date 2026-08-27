@@ -20,8 +20,8 @@ const modeHTTP = 3
 
 // HTTP is the HTTP mode.
 type HTTP struct {
-	URL  string       `toml:"url"     json:"url"`
-	Opts *HTTPOptions `toml:"options" json:"options"`
+	URL  string      `toml:"url"     json:"url"`
+	Opts HTTPOptions `toml:"options" json:"options"`
 }
 
 // HTTPOptions contains HTTP mode options.
@@ -43,9 +43,9 @@ type HTTPOptions struct {
 // NewHTTP is used to create image with HTTP mode.
 func NewHTTP(url string, opts *HTTPOptions) Image {
 	if opts == nil {
-		opts = &HTTPOptions{}
+		opts = new(HTTPOptions)
 	}
-	return &HTTP{URL: url, Opts: opts}
+	return &HTTP{URL: url, Opts: *opts}
 }
 
 // Encode implement Image interface.
