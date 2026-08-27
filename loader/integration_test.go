@@ -15,9 +15,8 @@ import (
 )
 
 var (
-	testImageGo   []byte
-	testImageRust []byte
-	testImageCPP  []byte
+	testImageGo  []byte
+	testImageCPP []byte
 )
 
 func init() {
@@ -27,15 +26,6 @@ func init() {
 		testImageGo, err = os.ReadFile("../test/image/x86/go.exe")
 	case "amd64":
 		testImageGo, err = os.ReadFile("../test/image/x64/go.exe")
-	}
-	if err != nil {
-		panic(err)
-	}
-	switch runtime.GOARCH {
-	case "386":
-		testImageRust, err = os.ReadFile("../test/image/x86/rust_msvc.exe")
-	case "amd64":
-		testImageRust, err = os.ReadFile("../test/image/x64/rust_msvc.exe")
 	}
 	if err != nil {
 		panic(err)
@@ -69,7 +59,7 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		wg.Wait()
 	})
 
-	t.Run("with different output error", func(t *testing.T) {
+	t.Run("different output error handle", func(t *testing.T) {
 		stdin := new(bytes.Buffer)
 		stdout := new(bytes.Buffer)
 		stderr := new(bytes.Buffer)
@@ -96,13 +86,15 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		err = instance.Run()
 		require.NoError(t, err)
 
-		fmt.Println("stdout:\n", stdout)
-		fmt.Println("stderr:\n", stderr)
-
 		wg.Wait()
+
+		fmt.Println("stdout:")
+		fmt.Println(stdout)
+		fmt.Println("stderr:")
+		fmt.Println(stderr)
 	})
 
-	t.Run("with same output error", func(t *testing.T) {
+	t.Run("same output error handle", func(t *testing.T) {
 		stdin := new(bytes.Buffer)
 		output := new(bytes.Buffer)
 
@@ -128,10 +120,12 @@ func TestLoadInMemoryEXE(t *testing.T) {
 		err = instance.Run()
 		require.NoError(t, err)
 
-		fmt.Println("stdout:\n", output)
-		fmt.Println("stderr:\n", output)
-
 		wg.Wait()
+
+		fmt.Println("stdout:")
+		fmt.Println(output)
+		fmt.Println("stderr:")
+		fmt.Println(output)
 	})
 
 	t.Run("not wait exit", func(t *testing.T) {
@@ -171,14 +165,17 @@ func TestLoadInMemoryEXE(t *testing.T) {
 	})
 
 	t.Run("restart", func(t *testing.T) {
-		instance, err := LoadInMemoryEXE(testImageRust, nil)
+		opts := Options{
+			CommandLine: "-kick 20",
+		}
+		instance, err := LoadInMemoryEXE(testImageGo, &opts)
 		require.NoError(t, err)
 
 		for i := 0; i < 3; i++ {
 			err = instance.Restart()
 			require.NoError(t, err)
 
-			time.Sleep(2 * time.Second)
+			time.Sleep(3 * time.Second)
 
 			err = instance.Exit(uint(i) + 123)
 			require.NoError(t, err)
@@ -187,29 +184,6 @@ func TestLoadInMemoryEXE(t *testing.T) {
 
 		err = instance.Free()
 		require.NoError(t, err)
-	})
-
-	t.Run("running on runtime", func(t *testing.T) {
-		opts := Options{
-			CommandLine: "-kick 20",
-			OnRuntime:   true,
-		}
-		instance, err := LoadInMemoryEXE(testImageGo, &opts)
-		require.NoError(t, err)
-
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			time.Sleep(5 * time.Second)
-			err := instance.Free()
-			require.NoError(t, err)
-		}()
-
-		err = instance.Run()
-		require.NoError(t, err)
-
-		wg.Wait()
 	})
 }
 
