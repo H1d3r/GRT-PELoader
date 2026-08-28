@@ -547,14 +547,18 @@ typedef struct {
 
 typedef struct {
     int64 NumCalls;
+    errno LastError;
+    int32 Reserved;
     int32 LastPreElapsed;   // ms
     int32 LastPostElapsed;  // ms
     int64 TotalPreElapsed;  // ms
     int64 TotalPostElapsed; // ms
     int32 MinPreElapsed;    // ms
-    int32 MaxPreElapsed;    // ms
     int32 MinPostElapsed;   // ms
+    int32 MaxPreElapsed;    // ms
     int32 MaxPostElapsed;   // ms
+    int32 AvgPreElapsed;    // ms
+    int32 AvgPostElapsed;   // ms
 } RT_SleepM;
 
 typedef struct {
