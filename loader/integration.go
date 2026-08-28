@@ -71,7 +71,7 @@ func loadInMemoryImage(image []byte, opts *Options, isDLL bool) (*Instance, erro
 	if arch != runtime.GOARCH {
 		return nil, errors.New("pe image architecture is mismatched")
 	}
-	return LoadInMemoryImage(NewEmbed(image), arch, opts)
+	return LoadInMemoryImage(NewEmbed(image, nil), arch, opts)
 }
 
 // LoadInMemoryImage is used to load unmanaged pe image to memory.
