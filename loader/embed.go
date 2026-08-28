@@ -70,8 +70,8 @@ func (e *Embed) Encode() ([]byte, error) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 16*1024))
 	// write the mode
 	buffer.WriteByte(modeEmbed)
-	// need use compress mode
-	if !e.opts.Compress {
+	// disable compression
+	if !e.opts.Compress && !e.opts.PreCompressed {
 		size := binary.LittleEndian.AppendUint32(nil, uint32(len(e.image))) // #nosec
 		buffer.WriteByte(disableCompression)
 		buffer.Write(size)
@@ -82,13 +82,13 @@ func (e *Embed) Encode() ([]byte, error) {
 	buffer.WriteByte(enableCompression)
 	// compress PE image
 	var compressed []byte
-	if !e.opts.PreCompressed {
+	if e.opts.PreCompressed {
+		compressed = e.image
+	} else {
 		compressed, err = lzss.Compress(e.image, e.opts.WindowSize, e.opts.ChainLen)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compress PE image: %s", err)
 		}
-	} else {
-		compressed = e.image
 	}
 	// write raw size
 	size := binary.LittleEndian.AppendUint32(nil, uint32(len(image))) // #nosec
