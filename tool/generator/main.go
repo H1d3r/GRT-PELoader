@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/For-ACGN/LZSS"
+
 	"github.com/RTS-Framework/GRT-Develop/instance"
 	"github.com/RTS-Framework/GRT-PELoader/loader"
 )
@@ -18,8 +20,7 @@ var (
 	arch   string
 	pePath string
 
-	compress  bool
-	comWindow int
+	embedOpts loader.EmbedOptions
 	httpOpts  loader.HTTPOptions
 	options   loader.Options
 
@@ -31,8 +32,8 @@ func init() {
 	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
 	flag.StringVar(&arch, "arch", "amd64", "set PE Loader template architecture")
 	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
-	flag.BoolVar(&compress, "compress", false, "compress image when use embed mode")
-	flag.IntVar(&comWindow, "window", 4096, "set the window size when use compression")
+	flag.BoolVar(&embedOpts.Compress, "compress", false, "compress image when use embed mode")
+	flag.BoolVar(&embedOpts.PreCompressed, "precompressed", false, "set it is a pre-compressed image")
 	flag.DurationVar(&httpOpts.ConnectTimeout, "timeout", 0, "set the timeout when use http mode")
 	flag.StringVar(&options.ImageName, "in", "", "set the image name about command line")
 	flag.StringVar(&options.CommandLine, "cmd", "", "set command line for exe")
@@ -85,14 +86,15 @@ func main() {
 			fmt.Println("unknown pe image architecture type")
 			return
 		}
-		if compress {
+		if embedOpts.Compress {
+			embedOpts.WindowSize = lzss.MaximumWindowSize
+			embedOpts.ChainLen = lzss.MaximumChainLen
+
 			fmt.Println("enable PE image compression")
-			s := (len(peData) / (2 * 1024 * 1024)) + 1
+			s := (len(peData) / (4 * 1024 * 1024)) + 1
 			fmt.Printf("please wait for about %d seconds for compress\n", s)
-			image = loader.NewEmbedCompress(peData, comWindow)
-		} else {
-			image = loader.NewEmbed(peData)
 		}
+		image = loader.NewEmbed(peData, &embedOpts)
 	case "file":
 		fmt.Println("use local file mode")
 		image = loader.NewFile(pePath)
