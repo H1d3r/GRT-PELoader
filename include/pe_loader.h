@@ -86,6 +86,7 @@ typedef struct {
     Wait_t Wait;
 
     // create a thread at EntryPoint or call DllMain with DLL_PROCESS_ATTACH.
+    // it equaled call Start and Wait.
     // it can call multi times with Exit.
     Execute_t Execute;
 
