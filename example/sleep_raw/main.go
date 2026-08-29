@@ -10,19 +10,19 @@ import (
 )
 
 func main() {
-	goSleep()
+	nativeGoSleep()
 	safeSleep()
 	unsafeSleep()
 }
 
 // it will not call the kernel32.Sleep, so it will not trigger SleepHR.
-func goSleep() {
+func nativeGoSleep() {
 	time.Sleep(time.Second)
 }
 
-// safeSleep like goSleep, use WaitableTimer with WaitForSingleObject.
+// safeSleep like nativeGoSleep, use WaitableTimer with WaitForSingleObject.
 // must cache the procedure address when development.
-// you can reference the go method gleamrt.SleepSim.
+// you can reference the go method gleamrt.sleepSim.
 func safeSleep() {
 	hGleamRT, err := windows.LoadLibrary("GleamRT.dll")
 	if err != nil {
