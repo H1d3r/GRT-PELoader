@@ -23,7 +23,9 @@ PELoader_M* Boot(void* ctx)
     {
         return NULL;
     }
-    (void)ctx; // reserved extended arguments
+
+    // reserved extended arguments
+    (void)ctx;
 
     // load config and initialize PE Loader
     PELoader_Cfg config = {
@@ -215,13 +217,6 @@ static void* loadImageFromEmbed(Runtime_M* runtime, byte* config)
     config++;
     switch (mode)
     {
-    case EMBED_DISABLE_COMPRESSION:
-      {
-        uint32 size = *(uint32*)config;
-        void* buf = runtime->Memory.Alloc(size);
-        mem_copy(buf, config + 4, size);
-        return buf;
-      }
     case EMBED_ENABLE_COMPRESSION:
       {
         uint32 rawSize = *(uint32*)(config+0);
@@ -234,6 +229,13 @@ static void* loadImageFromEmbed(Runtime_M* runtime, byte* config)
             SetLastErrno(ERR_INVALID_COMPRESS_DATA);
             return NULL;
         }
+        return buf;
+      }
+    case EMBED_DISABLE_COMPRESSION:
+      {
+        uint32 size = *(uint32*)config;
+        void* buf = runtime->Memory.Alloc(size);
+        mem_copy(buf, config + 4, size);
         return buf;
       }
     default:
