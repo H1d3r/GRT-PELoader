@@ -95,6 +95,19 @@ func TestEmbedPreCompressed(t *testing.T) {
 
 		spew.Dump(config)
 	})
+
+	t.Run("invalid compressed data", func(t *testing.T) {
+		invalid := []byte{0x80, 0x00}
+		opts := EmbedOptions{
+			PreCompressed: true,
+		}
+		embed := NewEmbed(invalid, &opts)
+
+		config, err := embed.Encode()
+		errStr := "invalid precompressed PE image: truncated match reference"
+		require.EqualError(t, err, errStr)
+		require.Nil(t, config)
+	})
 }
 
 func TestEmbedInstance(t *testing.T) {
