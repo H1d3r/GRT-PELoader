@@ -540,12 +540,9 @@ static bool parsePEImage(PELoader* loader)
     {
         return false;
     }
-    // check image file header
-    if ((*(byte*)(imageAddr+0)^0x7C) != ('M'^0x7C))
-    {
-        return false;
-    }
-    if ((*(byte*)(imageAddr+1)^0xA3) != ('Z'^0xA3))
+    // check image magic
+    byte magic[] = { 'M', 'Z' };
+    if (!strnequ_a((void*)(imageAddr), magic, 2))
     {
         return false;
     }
