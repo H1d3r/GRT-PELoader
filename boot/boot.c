@@ -24,7 +24,7 @@ PELoader_M* Boot(void* ctx)
         return NULL;
     }
 
-    // reserved extended arguments
+    // reserved context and extended arguments
     (void)ctx;
 
     // load config and initialize PE Loader
