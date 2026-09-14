@@ -4,7 +4,6 @@ package loader
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -203,8 +202,7 @@ func TestPipeline(t *testing.T) {
 	rt, err := hex.DecodeString(s)
 	require.NoError(t, err)
 
-	// build loader template for pipeline
-	template := append(bytes.Clone(ldr), rt...)
+	template := BuildTemplate(ldr, rt)
 	instOpts := instance.Options{
 		SkipArguments: true,
 	}
