@@ -18,20 +18,19 @@ var (
 	tplDir string
 	mode   string
 	arch   string
-	pePath string
 
 	embedOpts loader.EmbedOptions
 	httpOpts  loader.HTTPOptions
 	options   loader.Options
 
-	outPath string
+	input  string
+	output string
 )
 
 func init() {
 	flag.StringVar(&tplDir, "tpl", "", "set custom PE Loader templates directory")
 	flag.StringVar(&mode, "mode", "", "select the image load mode: embed, file and http")
 	flag.StringVar(&arch, "arch", "amd64", "set PE Loader template architecture")
-	flag.StringVar(&pePath, "pe", "", "set the input PE image file path")
 	flag.BoolVar(&embedOpts.Compress, "compress", false, "compress image when use embed mode")
 	flag.BoolVar(&embedOpts.PreCompressed, "precompressed", false, "set it is a pre-compressed image")
 	flag.DurationVar(&httpOpts.ConnectTimeout, "timeout", 0, "set the timeout when use http mode")
@@ -40,13 +39,14 @@ func init() {
 	flag.BoolVar(&options.WaitMain, "wait", false, "wait for image main thread to exit")
 	flag.BoolVar(&options.AllowSkipDLL, "skip-dll", false, "allow skip DLL if failed to load")
 	flag.BoolVar(&options.IgnoreStdIO, "silent", false, "ignore input/output about console")
-	flag.StringVar(&outPath, "o", "output.bin", "set output instance file path")
+	flag.StringVar(&input, "i", "", "set the input PE image source path")
+	flag.StringVar(&output, "o", "instance.bin", "set output instance file path")
 	instance.Flag(&options.Runtime)
 	flag.Parse()
 }
 
 func main() {
-	if pePath == "" {
+	if input == "" {
 		flag.Usage()
 		return
 	}
@@ -57,8 +57,8 @@ func main() {
 		ldrX86 []byte
 	)
 	if tplDir != "" {
-		var err error
 		fmt.Println("load custom PE Loader templates")
+		var err error
 		ldrX64, err = os.ReadFile(filepath.Join(tplDir, "PELoader_x64.bin")) // #nosec
 		checkError(err)
 		ldrX86, err = os.ReadFile(filepath.Join(tplDir, "PELoader_x86.bin")) // #nosec
@@ -71,7 +71,7 @@ func main() {
 	case "embed":
 		fmt.Println("use embed image mode")
 		fmt.Println("parse PE image file")
-		peData, err := os.ReadFile(pePath) // #nosec
+		peData, err := os.ReadFile(input) // #nosec
 		checkError(err)
 		peFile, err := pe.NewFile(bytes.NewReader(peData))
 		checkError(err)
@@ -97,10 +97,10 @@ func main() {
 		image = loader.NewEmbed(peData, &embedOpts)
 	case "file":
 		fmt.Println("use local file mode")
-		image = loader.NewFile(pePath)
+		image = loader.NewFile(input)
 	case "http":
 		fmt.Println("use http mode")
-		image = loader.NewHTTP(pePath, &httpOpts)
+		image = loader.NewHTTP(input, &httpOpts)
 	default:
 		fmt.Println("unknown load mode")
 		return
@@ -127,10 +127,10 @@ func main() {
 	inst, err := loader.CreateInstance(arch, image, &options)
 	checkError(err)
 
-	outPath, err = filepath.Abs(outPath)
+	output, err = filepath.Abs(output)
 	checkError(err)
-	fmt.Println("save instance to:", outPath)
-	err = os.WriteFile(outPath, inst, 0600) // #nosec
+	fmt.Println("save instance to:", output)
+	err = os.WriteFile(output, inst, 0600) // #nosec
 	checkError(err)
 
 	fmt.Println("create instance successfully")
