@@ -75,10 +75,10 @@ type Options struct {
 	// not stop runtime when call ExitProcess.
 	NotStopRuntime bool `toml:"not_stop_runtime" json:"not_stop_runtime"`
 
-	// ignore instantiate options.
-	IgnoreInstOpts bool `toml:"ignore_runtime_opts" json:"ignore_runtime_opts"`
+	// ignore instantiate options about runtime.
+	IgnoreInstOpts bool `toml:"ignore_inst_opts" json:"ignore_inst_opts"`
 
-	// set instantiate options.
+	// set instantiate options about runtime.
 	Runtime instance.Options `toml:"runtime" json:"runtime"`
 
 	// set additional arguments for upper PE image.
@@ -205,4 +205,10 @@ func instantiateFromTemplate(opts *Options, template []byte) ([]byte, error) {
 	instOpts := opts.Runtime
 	instOpts.SkipArguments = true
 	return instance.Instantiate(template, &instOpts)
+}
+
+// BuildTemplate is used to build template for Pipeline mode.
+// the loader is combine the boot and pe loader.
+func BuildTemplate(loader, runtime []byte) []byte {
+	return append(bytes.Clone(loader), runtime...)
 }
