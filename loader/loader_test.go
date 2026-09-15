@@ -192,15 +192,7 @@ func TestPipeline(t *testing.T) {
 		t.Fatal("unsupported architecture")
 	}
 	require.NoError(t, err)
-	s := string(rti)
-	s = strings.ReplaceAll(s, ",", "")
-	s = strings.ReplaceAll(s, " 0", "")
-	s = strings.ReplaceAll(s, "db", "")
-	s = strings.ReplaceAll(s, "h", "")
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "\r\n", "")
-	rt, err := hex.DecodeString(s)
-	require.NoError(t, err)
+	rt := testInstToBin(t, rti)
 
 	template := BuildTemplate(ldr, rt)
 	instOpts := instance.Options{
@@ -370,15 +362,8 @@ func TestModule(t *testing.T) {
 		t.Fatal("unsupported architecture")
 	}
 	require.NoError(t, err)
-	s := string(rti)
-	s = strings.ReplaceAll(s, ",", "")
-	s = strings.ReplaceAll(s, " 0", "")
-	s = strings.ReplaceAll(s, "db", "")
-	s = strings.ReplaceAll(s, "h", "")
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "\r\n", "")
-	tpl, err := hex.DecodeString(s)
-	require.NoError(t, err)
+	tpl := testInstToBin(t, rti)
+
 	rt, err := instance.Instantiate(tpl, nil)
 	require.NoError(t, err)
 
@@ -584,4 +569,17 @@ func TestModule(t *testing.T) {
 		err = RuntimeM.Exit()
 		require.NoError(t, err)
 	})
+}
+
+func testInstToBin(t *testing.T, i []byte) []byte {
+	s := string(i)
+	s = strings.ReplaceAll(s, ",", "")
+	s = strings.ReplaceAll(s, " 0", "")
+	s = strings.ReplaceAll(s, "db", "")
+	s = strings.ReplaceAll(s, "h", "")
+	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(s, "\r\n", "")
+	bin, err := hex.DecodeString(s)
+	require.NoError(t, err)
+	return bin
 }
