@@ -104,27 +104,11 @@ func CreateInstance(arch string, image Image, opts *Options) ([]byte, error) {
 	// process command line
 	cmdLineA, cmdLineW := processCommandLine(opts)
 	// process switch about loader config
-	var (
-		waitMain       = make([]byte, 1)
-		allowSkipDLL   = make([]byte, 1)
-		ignoreStdIO    = make([]byte, 1)
-		notAutoRun     = make([]byte, 1)
-		notStopRuntime = make([]byte, 1)
-	)
-	for _, item := range [...]struct {
-		data []byte
-		opt  bool
-	}{
-		{data: waitMain, opt: opts.WaitMain},
-		{data: allowSkipDLL, opt: opts.AllowSkipDLL},
-		{data: ignoreStdIO, opt: opts.IgnoreStdIO},
-		{data: notAutoRun, opt: opts.NotAutoRun},
-		{data: notStopRuntime, opt: opts.NotStopRuntime},
-	} {
-		if item.opt {
-			item.data[0] = 1
-		}
-	}
+	waitMain := encodeToBOOL(opts.WaitMain)
+	allowSkipDLL := encodeToBOOL(opts.AllowSkipDLL)
+	ignoreStdIO := encodeToBOOL(opts.IgnoreStdIO)
+	notAutoRun := encodeToBOOL(opts.NotAutoRun)
+	notStopRuntime := encodeToBOOL(opts.NotStopRuntime)
 	// process standard handle and default template
 	stdInput := binary.LittleEndian.AppendUint64(nil, opts.StdInput)
 	stdOutput := binary.LittleEndian.AppendUint64(nil, opts.StdOutput)
@@ -205,6 +189,13 @@ func instantiateFromTemplate(opts *Options, template []byte) ([]byte, error) {
 	instOpts := opts.Runtime
 	instOpts.SkipArguments = true
 	return instance.Instantiate(template, &instOpts)
+}
+
+func encodeToBOOL(b bool) []byte {
+	if b {
+		return []byte{1, 0, 0, 0}
+	}
+	return []byte{0, 0, 0, 0}
 }
 
 // BuildTemplate is used to build template for Pipeline mode.
