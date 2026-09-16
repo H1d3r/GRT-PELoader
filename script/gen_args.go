@@ -15,17 +15,17 @@ func main() {
 	cmdlineA := []byte(cmdline + "\x00")
 	cmdlineW := types.StringToUTF16(cmdline)
 	args := []*argument.Arg{
-		{ID: 1, Data: []byte{0xFF}},    // invalid PE image
-		{ID: 2, Data: cmdlineA},        // command line ANSI
-		{ID: 3, Data: cmdlineW},        // command line UTF16
-		{ID: 4, Data: make([]byte, 4)}, // standard input handle
-		{ID: 5, Data: make([]byte, 4)}, // standard output handle
-		{ID: 6, Data: make([]byte, 4)}, // standard error handle
-		{ID: 7, Data: []byte{0x01}},    // wait main thread
-		{ID: 8, Data: []byte{0x01}},    // allow skip dll
-		{ID: 9, Data: []byte{0x01}},    // ignore standard handle
-		{ID: 10, Data: []byte{0x01}},   // not auto run
-		{ID: 11, Data: []byte{0x01}},   // not stop runtime
+		{ID: 1, Data: []byte{0xFF, 0xFE}}, // invalid PE image
+		{ID: 2, Data: cmdlineA},           // command line ANSI
+		{ID: 3, Data: cmdlineW},           // command line UTF16
+		{ID: 4, Data: make([]byte, 4)},    // standard input handle
+		{ID: 5, Data: make([]byte, 4)},    // standard output handle
+		{ID: 6, Data: make([]byte, 4)},    // standard error handle
+		{ID: 7, Data: make([]byte, 4)},    // wait main thread
+		{ID: 8, Data: make([]byte, 4)},    // allow skip dll
+		{ID: 9, Data: make([]byte, 4)},    // ignore standard handle
+		{ID: 10, Data: make([]byte, 4)},   // not auto run
+		{ID: 11, Data: make([]byte, 4)},   // not stop runtime
 	}
 	stub, err := argument.Encode(args...)
 	checkError(err)
@@ -39,17 +39,17 @@ func main() {
 	cmdlineA = []byte(cmdline + "\x00")
 	cmdlineW = types.StringToUTF16(cmdline)
 	args = []*argument.Arg{
-		{ID: 1, Data: []byte{0xFF}},    // invalid PE image
-		{ID: 2, Data: cmdlineA},        // command line ANSI
-		{ID: 3, Data: cmdlineW},        // command line UTF16
-		{ID: 4, Data: make([]byte, 8)}, // standard input handle
-		{ID: 5, Data: make([]byte, 8)}, // standard output handle
-		{ID: 6, Data: make([]byte, 8)}, // standard error handle
-		{ID: 7, Data: []byte{0x01}},    // wait main thread
-		{ID: 8, Data: []byte{0x01}},    // allow skip dll
-		{ID: 9, Data: []byte{0x01}},    // ignore standard handle
-		{ID: 10, Data: []byte{0x01}},   // not auto run
-		{ID: 11, Data: []byte{0x01}},   // not stop runtime
+		{ID: 1, Data: []byte{0xFF, 0xFE}}, // invalid PE image
+		{ID: 2, Data: cmdlineA},           // command line ANSI
+		{ID: 3, Data: cmdlineW},           // command line UTF16
+		{ID: 4, Data: make([]byte, 8)},    // standard input handle
+		{ID: 5, Data: make([]byte, 8)},    // standard output handle
+		{ID: 6, Data: make([]byte, 8)},    // standard error handle
+		{ID: 7, Data: make([]byte, 4)},    // wait main thread
+		{ID: 8, Data: make([]byte, 4)},    // allow skip dll
+		{ID: 9, Data: make([]byte, 4)},    // ignore standard handle
+		{ID: 10, Data: make([]byte, 4)},   // not auto run
+		{ID: 11, Data: make([]byte, 4)},   // not stop runtime
 	}
 	stub, err = argument.Encode(args...)
 	checkError(err)
